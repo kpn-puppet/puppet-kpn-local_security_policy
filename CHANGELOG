@@ -1,5 +1,12 @@
+2018-06-11 Release 3.1.0
+- 'Privilege Rights' now supports merging of values (issue #2)
+ - 'set:' will set the policy_value
+ - 'merge:' will merge the policy_value
+   - '+' adds a value when using 'merge'
+   - '-' removes a value when using 'merge'
+
 2018-03-22 Release 3.0.2
-- 'Privilige Rights' policies now support domain accounts/groups
+- 'Privilege Rights' policies now support domain accounts/groups
 - made the 'Privilege Rights' policies idempotent
 - the previous versions of local_security_policy used a translation tabel to convert the user names to
   SID's. Release 3.0.0 will translate the Windows user names directly to SID's.

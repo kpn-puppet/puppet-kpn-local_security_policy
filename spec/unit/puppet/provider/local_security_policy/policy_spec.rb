@@ -10,13 +10,13 @@ describe provider_class do
     Puppet::Util.stubs(:which).with('secedit').returns('c:\\tools\\secedit')
     infout = StringIO.new
     sdbout = StringIO.new
-    allow(provider_class).to receive(:read_policy_settings).and_return(inf_data)
+    allow(SecurityPolicy).to receive(:read_policy_settings).and_return(inf_data)
     allow(Tempfile).to receive(:new).with('infimport').and_return(infout)
     allow(Tempfile).to receive(:new).with('sdbimport').and_return(sdbout)
     allow(File).to receive(:file?).and_return(true)
     # the below mock seems to be required or rspec complains
     allow(File).to receive(:file?).with(%r{facter}).and_return(true)
-    allow(provider_class).to receive(:temp_file).and_return(secdata)
+    allow(SecurityPolicy).to receive(:temp_file).and_return(secdata)
     provider_class.stubs(:secedit).with(['/configure', '/db', 'sdbout', '/cfg', 'infout', '/quiet'])
     provider_class.stubs(:secedit).with(['/export', '/cfg', secdata, '/quiet'])
   end
@@ -77,7 +77,7 @@ describe provider_class do
   # if you get this error, your are missing a entry in the lsp_mapping under puppet_x/security_policy
   # either its a type, case, or missing entry
   it 'lsp_mapping should contain all the entries in secdata file' do
-    inffile = provider_class.read_policy_settings
+    inffile = SecurityPolicy.read_policy_settings
     missing_policies = {}
     # message = lambda { |pol| 'Missing policy, check the lsp mapping for something like: #{pol}\n' }
 

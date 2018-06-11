@@ -12,6 +12,7 @@ describe 'SecurityPolicy' do
     ENV['windir'] = 'C:\Windows'
     infout = StringIO.new
     sdbout = StringIO.new
+    allow(SecurityPolicy).to receive(:read_policy_settings).and_return(inf_data)
     allow(Tempfile).to receive(:new).with('infimport').and_return(infout)
     allow(Tempfile).to receive(:new).with('sdbimport').and_return(sdbout)
     allow(File).to receive(:file?).with(secdata).and_return(true)
@@ -26,6 +27,12 @@ describe 'SecurityPolicy' do
     security_policy.stubs('user_to_sid').with('Network Configuration Operators').returns('*S-1-5-32-556')
     security_policy.stubs('user_to_sid').with('NT_SERVICE\\ALL_SERVICES').returns('*S-1-5-80-0')
     security_policy.stubs('user_to_sid').with('N_SERVICE\\ALL_SERVICES').returns('N_SERVICE\\ALL_SERVICES')
+  end
+
+  let(:inf_data) do
+    regexp = '\xEF\xBB\xBF'
+    inffile_content = File.read(secdata).encode('utf-8', universal_newline: true).gsub(regexp, '')
+    PuppetX::IniFile.new(content: inffile_content)
   end
 
   let(:secdata) do

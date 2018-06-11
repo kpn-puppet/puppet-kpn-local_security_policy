@@ -68,7 +68,7 @@ Puppet::Type.newtype(:local_security_policy) do
       SecurityPolicy.validate_policy_value(resource.to_hash, value)
     end
     munge do |value|
-      SecurityPolicy.convert_policy_value(resource.to_hash, value)
+      SecurityPolicy.convert_policy_value(resource.to_hash, value, SecurityPolicy.get_policy_value_current(resource[:name]))
     end
   end
 

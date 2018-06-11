@@ -26,59 +26,6 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
   commands secedit: 'secedit'
   mk_resource_methods
 
-  # export the policy settings to the specified file and return the filename
-  def self.export_policy_settings(inffile = nil)
-    inffile ||= temp_file
-    secedit('/export', '/cfg', inffile)
-    inffile
-  end
-
-  # export and then read the policy settings from a file into a inifile object
-  # caches the IniFile object during the puppet run
-  def self.read_policy_settings(inffile = nil)
-    inffile ||= temp_file
-    unless @file_object
-      export_policy_settings(inffile)
-      File.open inffile, 'r:IBM437' do |file|
-        # remove /r/n and remove the BOM
-        inffile_content = file.read.force_encoding('utf-16le').encode('utf-8', universal_newline: true).delete("\xEF\xBB\xBF")
-        @file_object ||= PuppetX::IniFile.new(content: inffile_content)
-      end
-    end
-    @file_object
-  end
-
-  def self.return_actual_policy_value(value, reg_type)
-    value = (reg_type == '1') ? value.delete('"').split(',').drop(1).join(',') : value.split(',').drop(1).join(',')
-    value
-  end
-
-  # converts any values that might be of a certain type specified in the mapping
-  # converts everything to a string
-  # returns the value
-  def self.translate_value(value, policy_values)
-    value = value.to_s.strip
-    case policy_values[:policy_type]
-    when 'Registry Values'
-      value = return_actual_policy_value(value, policy_values[:reg_type])
-    when 'Event Audit'
-      value = SecurityPolicy.event_audit_mapper(value)
-    when 'Privilege Rights'
-      sids = Array.[]
-      value.split(',').sort.each do |suser|
-        sids << ((suser !~ %r{^(\*S-1-.+)$}) ? ('*' + Puppet::Util::Windows::SID.name_to_sid(suser).to_s) : suser.to_s)
-      end
-      value = sids.sort.join(',')
-    end
-    case policy_values[:data_type]
-    when :boolean
-      value = value.to_i.zero? ? 'disabled' : 'enabled'
-    when :multi_select
-      value = policy_values[:policy_options][value]
-    end
-    value
-  end
-
   # exports the current list of policies into a file and then parses that file into
   # provider instances.  If an item is found on the system but not in the lsp_mapping,
   # that policy is not supported only because we cannot match the description
@@ -86,7 +33,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
   # that resource absent
   def self.instances
     settings = []
-    inf = read_policy_settings
+    inf = SecurityPolicy.read_policy_settings
     # need to find the policy, section_header, policy_setting, policy_value and reg_type
     inf.each do |section, parameter_name, parameter_value|
       next if section == 'Unicode'
@@ -100,7 +47,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
             policy_type: section,
             policy_setting: parameter_name,
             policy_default: policy_values[:policy_default],
-            policy_value: translate_value(parameter_value, policy_values),
+            policy_value: SecurityPolicy.translate_value(parameter_value, policy_values),
             data_type: policy_values[:data_type],
             reg_type: policy_values[:reg_type],
           }

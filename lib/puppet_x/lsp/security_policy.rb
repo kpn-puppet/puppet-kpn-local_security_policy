@@ -5,26 +5,124 @@ require 'puppet/util'
 
 # class SecurityPolicy
 class SecurityPolicy
-  EVENT_TYPES = ['Success,Failure', 'Success', 'Failure', 'No auditing'].freeze
-  STATE_TYPES = %w[enabled disabled].freeze
+  EVENT_TYPES = ['Success,Failure', 'Success', 'Failure', 'No auditing']
+  STATE_TYPES = %w[enabled disabled]
 
   def user_to_sid(value)
     '*' + Puppet::Util::Windows::SID.name_to_sid(value)
   end
 
-  def convert_privilege_right(ensure_value, policy_value)
+  def convert_privilege_right(policy_hash, policy_value, policy_value_current)
     # we need to convert users to sids first
-    if ensure_value.to_s == 'absent'
+    policy_value_new = policy_value_current.split(',').sort
+    if policy_hash[:ensure].to_s == 'absent'
       pv = ''
     else
-      sids = []
-      policy_value.split(',').sort.each do |suser|
-        suser.strip!
-        sids << user_to_sid(suser)
+      if policy_value.include? ':'
+        pvm = policy_value.split(':')[1]
+        task = policy_value.split(':')[0]
+      else
+        pvm = policy_value
+        task = 'set:'
       end
-      pv = sids.sort.join(',')
+
+      if task == 'merge'
+        pvm.split(',').sort.each do |muser|
+          muser.strip!
+          # rubocop:disable Performance/RegexpMatch
+          # needed when using ruby 2.1
+          if muser =~ %r{^\-}
+            policy_value_new.delete(user_to_sid(muser.delete('-')))
+          else
+            policy_value_new.push(user_to_sid(muser.delete('+')))
+          end
+          # rubocop:enable Performance/RegexpMatch
+        end
+      else
+        pvm.split(',').sort.each do |suser|
+          policy_value_new << user_to_sid(suser)
+        end
+      end
+
+      pv = policy_value_new.uniq.sort.join(',')
     end
     pv
+  end
+
+  def self.get_policy_value_current(policy_name)
+    policy_value_current = 'empty?'
+    inf = read_policy_settings
+    # need to find the policy, section_header, policy_setting, policy_value and reg_type
+    inf.each do |section, parameter_name, parameter_value|
+      next if section == 'Unicode'
+      next if section == 'Version'
+      begin
+        policy_desc, policy_values = SecurityPolicy.find_mapping_from_policy_name(parameter_name)
+        if policy_desc == policy_name
+          policy_value_current = translate_value(parameter_value, policy_values)
+        end
+      rescue KeyError => e
+        Puppet.debug e.message
+      end
+    end
+    policy_value_current
+  end
+
+  # export and then read the policy settings from a file into a inifile object
+  # caches the IniFile object during the puppet run
+  def self.read_policy_settings(inffile = nil)
+    inffile ||= temp_file
+    unless @file_object
+      export_policy_settings(inffile)
+      File.open inffile, 'r:IBM437' do |file|
+        # remove /r/n and remove the BOM
+        inffile_content = file.read.force_encoding('utf-16le').encode('utf-8', universal_newline: true).delete("\xEF\xBB\xBF")
+        @file_object ||= PuppetX::IniFile.new(content: inffile_content)
+      end
+    end
+    @file_object
+  end
+
+  def self.temp_file
+    'c:\windows\temp\secedit.inf'
+  end
+
+  # export the policy settings to the specified file and return the filename
+  def self.export_policy_settings(inffile = nil)
+    inffile ||= temp_file
+    system("cmd /c c:/windows/system32/secedit.exe /export /cfg #{temp_file} >nil")
+    inffile
+  end
+
+  # converts any values that might be of a certain type specified in the mapping
+  # converts everything to a string
+  # returns the value
+  def self.translate_value(value, policy_values)
+    value = value.to_s.strip
+    case policy_values[:policy_type]
+    when 'Registry Values'
+      value = return_actual_policy_value(value, policy_values[:reg_type])
+    when 'Event Audit'
+      value = SecurityPolicy.event_audit_mapper(value)
+    when 'Privilege Rights'
+      sids = Array.[]
+      value.split(',').sort.each do |suser|
+        sids << ((suser !~ %r{^(\*S-1-.+)$}) ? ('*' + Puppet::Util::Windows::SID.name_to_sid(suser).to_s) : suser.to_s)
+      end
+      value = sids.sort.join(',')
+    end
+    case policy_values[:data_type]
+    when :boolean
+      value = value.to_i.zero? ? 'disabled' : 'enabled'
+    when :multi_select
+      value = policy_values[:policy_options][value]
+    end
+    value
+  end
+
+  def self.return_actual_policy_value(value, reg_type)
+    value = (reg_type == '1') ? value.delete('"').split(',').drop(1).join(',') : value.split(',').drop(1).join(',')
+    value
   end
 
   # Converts a event number to a word
@@ -89,14 +187,14 @@ class SecurityPolicy
   end
 
   # converts the policy value to machine values
-  def self.convert_policy_value(policy_hash, value)
+  def self.convert_policy_value(policy_hash, value, policy_value_current)
     sp = SecurityPolicy.new
     # I would rather not have to look this info up, but the type code will not always have this info handy
     # without knowing the policy type we can't figure out what to convert
     policy_type = find_mapping_from_policy_desc(policy_hash[:name])[:policy_type]
     case policy_type.to_s
     when 'Privilege Rights'
-      value = sp.convert_privilege_right(policy_hash[:ensure], value)
+      value = sp.convert_privilege_right(policy_hash, value, policy_value_current)
     end
     value
   end
@@ -119,6 +217,22 @@ class SecurityPolicy
       when :multi_select
         raise ArgumentError, "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', should be one of '#{policy_hash[:policy_options].values.join(', ')}'" unless
           policy_hash[:policy_options].values.include?(value)
+      end
+    when 'Privilege Rights'
+      if value.include? ':'
+        pvm = value.split(':')[1]
+        task = value.split(':')[0]
+      else
+        pvm = value
+        task = 'set:'
+      end
+
+      unless task == 'merge'
+        pvm.split(',').sort.each do |muser|
+          muser.strip!
+          raise ArgumentError, "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', value may not start with a '-'" if muser =~ %r{^\-}
+          raise ArgumentError, "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', value may not start with a '+'" if muser =~ %r{^\+}
+        end
       end
     end
   end

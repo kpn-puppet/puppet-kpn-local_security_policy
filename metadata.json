@@ -1,6 +1,6 @@
 {
   "name": "kpn-local_security_policy",
-  "version": "3.0.2",
+  "version": "3.1.0",
   "author": "kpn",
   "summary": "This module sets Local Security Policy settings on Windows.",
   "license": "Apache-2.0",

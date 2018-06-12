@@ -9,6 +9,7 @@ This module was forked from [git@github.com:logicminds/local_security_policy.git
     * [Account Policy](#account-policy)
     * [Local Policy](#local-policy)
 1. [Usage](#usage)
+    * [Setting or merging User Rights](Setting-or-merging-User-Rights)
     * [Listing all local security policies](#listing-all-local-security-policies)
     * [Examples](#examples)
       * [Example Password Policy](#example-password-policy)
@@ -56,6 +57,12 @@ local_security_policy { 'Audit account logon events': <- Title / Name
 }
 ```
 
+### Setting or merging User Rights
+With `Privilege Rights` it is possible to `set:` the value or to `merge:` the values.
+When using the `set:` option, the `policy_value` is set as the desired value. Do not use '+' or '-' when using `set:`.
+When using the `merge:` option, the `policy_value` is merged with the existing value. '+' will add a value and '-' will remove a value.
+If you do not use `set:` or `merge:` then `set:` will be the default.
+
 ### Listing all local security policies
 Show all local_security_policy resources available on server
 ```
@@ -92,10 +99,19 @@ local_security_policy { 'Allow log on locally':
 }
 ```
 
+Administrators and Remote Desktop Users will be set:
 ```
 local_security_policy { 'Allow log on through Remote Desktop Services':
   ensure       => 'present',
-  policy_value => 'Administrators, Remote Desktop Users',
+  policy_value => 'set: Administrators, Remote Desktop Users',
+}
+```
+
+Administrators and Remote Desktop Users will be added and Power Users will be removed:
+```
+local_security_policy { 'Allow log on through Remote Desktop Services':
+  ensure       => 'present',
+  policy_value => 'merge: Administrators, +Remote Desktop Users, -Power Users',
 }
 ```
 
@@ -115,6 +131,7 @@ local_security_policy { 'User Account Control: Behavior of the elevation prompt 
   policy_value => 'Elevate without prompting',
 }
 ```
+
 
 ### Full list of settings available
 ```

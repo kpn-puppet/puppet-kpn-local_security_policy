@@ -23,7 +23,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
   confine    osfamily: :windows
   defaultfor osfamily: :windows
   # limit access to systems with these commands since this is the tools we need
-  commands secedit: 'secedit'
+  commands secedit: 'secedit', reg: 'reg'
   mk_resource_methods
 
   # exports the current list of policies into a file and then parses that file into

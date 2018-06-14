@@ -1,3 +1,6 @@
+2018-06-12 Release 3.1.1
+- fix: absent didn't work for registry policies.
+
 2018-06-11 Release 3.1.0
 - 'Privilege Rights' now supports merging of values (issue #2)
  - 'set:' will set the policy_value

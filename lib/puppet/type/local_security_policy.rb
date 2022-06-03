@@ -2,7 +2,7 @@
 
 begin
   require 'puppet_x/lsp/security_policy'
-rescue LoadError => _detail
+rescue LoadError => e
   require 'pathname' # JJM WORK_AROUND #14073
   module_base = Pathname.new(__FILE__).dirname
   require module_base + '../../' + 'puppet_x/lsp/security_policy.rb'
@@ -68,7 +68,7 @@ Puppet::Type.newtype(:local_security_policy) do
       SecurityPolicy.validate_policy_value(resource.to_hash, value)
     end
     munge do |value|
-      SecurityPolicy.convert_policy_value(resource.to_hash, value, SecurityPolicy.get_policy_value_current(resource[:name]))
+      SecurityPolicy.convert_policy_value(resource.to_hash, value)
     end
   end
 

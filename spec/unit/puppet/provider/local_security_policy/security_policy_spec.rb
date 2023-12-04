@@ -4,35 +4,24 @@ require 'spec_helper'
 require 'puppet_x/lsp/security_policy'
 
 describe 'SecurityPolicy' do
-  subject { SecurityPolicy }
+  subject(:securitypolicy) { SecurityPolicy }
 
   before :each do
-    Puppet::Util.stubs(:which).with('secedit').returns('c:\\tools\\secedit')
     # Set windir environment variable
     ENV['windir'] = 'C:\Windows'
     infout = StringIO.new
     sdbout = StringIO.new
-    allow(SecurityPolicy).to receive(:read_policy_settings).and_return(inf_data)
     allow(Tempfile).to receive(:new).with('infimport').and_return(infout)
     allow(Tempfile).to receive(:new).with('sdbimport').and_return(sdbout)
     allow(File).to receive(:file?).with(secdata).and_return(true)
     # the below mock seems to be required or rspec complains
     allow(File).to receive(:file?).with(%r{facter}).and_return(true)
-    allow(SecurityPolicy).to receive(:temp_file).and_return(secdata)
-    SecurityPolicy.stubs(:secedit).with(['/configure', '/db', 'sdbout', '/cfg', 'infout', '/quiet'])
-    SecurityPolicy.stubs(:secedit).with(['/export', '/cfg', secdata, '/quiet'])
-    security_policy.stubs('user_to_sid').with('*S-11-5-80-0').returns('*S-11-5-80-0')
-    security_policy.stubs('sid_to_user').with('S-1-5-32-556').returns('Network Configuration Operators')
-    security_policy.stubs('sid_to_user').with('*S-1-5-80-0').returns('NT_SERVICE\\ALL_SERVICES')
-    security_policy.stubs('user_to_sid').with('Network Configuration Operators').returns('*S-1-5-32-556')
-    security_policy.stubs('user_to_sid').with('NT_SERVICE\\ALL_SERVICES').returns('*S-1-5-80-0')
-    security_policy.stubs('user_to_sid').with('N_SERVICE\\ALL_SERVICES').returns('N_SERVICE\\ALL_SERVICES')
-  end
-
-  let(:inf_data) do
-    regexp = '\xEF\xBB\xBF'
-    inffile_content = File.read(secdata).encode('utf-8', universal_newline: true).gsub(regexp, '')
-    PuppetX::IniFile.new(content: inffile_content)
+    allow(security_policy).to receive('user_to_sid').with('*S-11-5-80-0').and_return('*S-11-5-80-0')
+    allow(security_policy).to receive('sid_to_user').with('S-1-5-32-556').and_return('Network Configuration Operators')
+    allow(security_policy).to receive('sid_to_user').with('*S-1-5-80-0').and_return('NT_SERVICE\\ALL_SERVICES')
+    allow(security_policy).to receive('user_to_sid').with('Network Configuration Operators').and_return('*S-1-5-32-556')
+    allow(security_policy).to receive('user_to_sid').with('NT_SERVICE\\ALL_SERVICES').and_return('*S-1-5-80-0')
+    allow(security_policy).to receive('user_to_sid').with('N_SERVICE\\ALL_SERVICES').and_return('N_SERVICE\\ALL_SERVICES')
   end
 
   let(:secdata) do
@@ -60,4 +49,45 @@ describe 'SecurityPolicy' do
   it 'returns user when sid is not found' do
     expect(security_policy.user_to_sid('N_SERVICE\\ALL_SERVICES')).to eq('N_SERVICE\\ALL_SERVICES')
   end
+
+  # describe 'privilege right' do
+  #   let(:resource) {
+  #     Puppet::Type.type(:local_security_policy).new(
+  #         :name =>  'Access this computer from the network',
+  #         :ensure         => 'present',
+  #         :policy_setting => 'SeNetworkLogonRight',
+  #         :policy_type    => 'Privilege Rights',
+  #         :policy_value   => 'AUTHENTICATED_USERS,BUILTIN_ADMINISTRATORS'
+  #     )
+  #   }
+  #   it 'should convert a privilege right to sids' do
+  #     hash = security_policy.convert_policy_value(resource, resource[:policy_value])
+  #     expect(hash[:policy_value]).to eq('*S-1-5-11,*S-1-5-32-544')
+  #   end
+
+  # end
+  #
+  # describe 'audit event' do
+  #   let(:resource) {
+  #     Puppet::Type.type(:local_security_policy).new(
+  #         :name => 'Audit account logon events',
+  #         :ensure         => 'present',
+  #         :policy_setting => "AuditAccountLogon",
+  #         :policy_type    => "Event Audit",
+  #         :policy_value   => 'Success,Failure',
+  #     )
+  #   }
+  #   it 'should convert a audit right' do
+  #     defined_policy = SecurityPolicy.find_mapping_from_policy_desc(resource[:name])
+  #     defined_policy.merge!(resource.to_hash)
+  #     expect(provider.convert_audit(defined_policy)).to eq(3)
+  #   end
+  #
+  #   it 'should convert a audit right' do
+  #     defined_policy = SecurityPolicy.find_mapping_from_policy_desc(resource[:name])
+  #     defined_policy.merge!(resource.to_hash)
+  #     hash = provider.convert_policy_hash(defined_policy)
+  #     expect(hash[:policy_value]).to eq(3)
+  #   end
+  # end
 end

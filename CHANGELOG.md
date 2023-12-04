@@ -1,3 +1,6 @@
+2020-07-28 Release 3.1.2
+- Rubocop ruby 2.4-strict fixes.
+
 2018-06-12 Release 3.1.1
 - fix: absent didn't work for registry policies.
 

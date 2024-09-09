@@ -15,12 +15,12 @@ init:
   - 'mkdir C:\ProgramData\PuppetLabs\puppet\var && exit 0'
 install:
   - choco install pdk --version 3.0.0 -y
-  - setx /M path "%path%;C:\Program Files\Puppet Labs\DevelopmentKit\"
-  - $env:PATH
+  - setx /M path "%path%;C:\Progra~1\Puppet~1\DevelopmentKit\bin\"
 build: false
 test_script:
   - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk validate --puppet-version=7
   - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk test unit --puppet-version=7
+  - pdk --version
 notifications:
   - provider: Email
     to:

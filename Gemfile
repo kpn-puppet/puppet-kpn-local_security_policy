@@ -28,6 +28,8 @@ group :development do
   gem "metadata-json-lint"
   gem "puppet-syntax"
   gem "puppetlabs_spec_helper"
+  gem "parser", '3.1.2.1'
+  gem "rubocop-ast", '1.23.0'
   gem "rubocop", '0.93.1'
   gem "fast_gettext", '1.1.0',                                   require: false if Gem::Version.new(RUBY_VERSION.dup) < Gem::Version.new('2.1.0')
   gem "fast_gettext",                                            require: false if Gem::Version.new(RUBY_VERSION.dup) >= Gem::Version.new('2.1.0')

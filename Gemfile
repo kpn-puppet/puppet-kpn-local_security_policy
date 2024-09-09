@@ -18,6 +18,7 @@ minor_version = ruby_version_segments[0..1].join('.')
 
 group :development do
   gem "rake"
+  gem "racc", '1.6.0'
   gem "rspec-core"
   gem "rspec"
   gem "rspec-puppet"

@@ -15,7 +15,7 @@ init:
   - 'mkdir C:\ProgramData\PuppetLabs\puppet\var && exit 0'
 install:
   - choco install pdk --version 3.0.0 -y
-  - del Gemfile.lock
+  - setx /M path "%path%;'C:\Program Files\Puppet Labs\DevelopmentKit\'"
 build: false
 test_script:
   - pdk validate --puppet-version=7

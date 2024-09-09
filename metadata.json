@@ -37,7 +37,5 @@
     "windows",
     "security"
   ],
-  "pdk-version": "3.0.0",
-  "template-url": "ssh://git@github.tooling.kpn.org/team-puppet-modulebouw/pdk_templates#main",
-  "template-ref": "heads/main-0-g75ee08a"
+  "pdk-version": "3.0.0"
 }

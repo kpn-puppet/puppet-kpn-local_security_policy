@@ -17,6 +17,7 @@ init:
 install:
   - choco install pdk --version 3.0.0 -y
   - setx /M path "%path%;C:\Progra~1\Puppet~1\DevelopmentKit\bin\"
+  - refreshenv
 build: false
 test_script:
   - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk validate --puppet-version=7

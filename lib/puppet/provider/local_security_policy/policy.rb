@@ -9,8 +9,8 @@ begin
 rescue LoadError
   require 'pathname' # JJM WORK_AROUND #14073
   module_base = Pathname.new(__FILE__).dirname
-  require module_base + '../../../' + 'puppet_x/twp/inifile.rb'
-  require module_base + '../../../' + 'puppet_x/lsp/security_policy.rb'
+  require "#{module_base}../../../puppet_x/twp/inifile.rb"
+  require "#{module_base}../../../puppet_x/lsp/security_policy.rb"
 end
 
 Puppet::Type.type(:local_security_policy).provide(:policy) do
@@ -42,7 +42,9 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
       export_policy_settings(inffile)
       File.open inffile, 'r:IBM437' do |file|
         # remove /r/n and remove the BOM
-        inffile_content = file.read.force_encoding('utf-16le').encode('utf-8', universal_newline: true).delete('\xEF\xBB\xBF')
+        inffile_content = file.read.force_encoding('utf-16le').encode('utf-8', universal_newline: true).gsub(
+          "\xEF\xBB\xBF", ''
+        )
         @file_object ||= PuppetX::IniFile.new(content: inffile_content)
       end
     end
@@ -52,7 +54,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
   def self.return_actual_policy_value(value, reg_type)
     case reg_type
     when '1'
-      value.delete('"').split(',').drop(1).join(',')
+      value.gsub('"', '').split(',').drop(1).join(',')
     else
       value.split(',').drop(1).join(',')
     end
@@ -71,10 +73,10 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
     when 'Privilege Rights'
       sids = []
       value.split(',').sort.each do |suser|
-        sids << if suser.match?(%r{^(\*S-1-.+)$})
-                  suser.to_s
+        sids << if suser !~ %r{^(\*S-1-.+)$}
+                  "*#{Puppet::Util::Windows::SID.name_to_sid(suser)}"
                 else
-                  '*' + Puppet::Util::Windows::SID.name_to_sid(suser).to_s
+                  suser.to_s
                 end
       end
       value = sids.sort.join(',')
@@ -172,7 +174,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
       @property_hash[:ensure] = :absent
       if @property_hash[:policy_default] != 'enabled' # sometimes absent can mean that the default value should be 'enabled'
         # deletes the registry key when the policy is absent and the default value is not 'enabled'
-        registry_key = 'HKEY_LOCAL_' + @property_hash[:policy_setting].split('\\')[0...-1].join('\\')
+        registry_key = "HKEY_LOCAL_#{@property_hash[:policy_setting].split('\\')[0...-1].join('\\')}"
         registry_value = @property_hash[:policy_setting].split('\\').last
         reg(['delete', registry_key, '/v', registry_value, '/f'])
       end
@@ -189,7 +191,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
   def self.prefetch(resources)
     policies = instances
     resources.each_key do |name|
-      if found_pol == policies.find { |pol| pol.name == name }
+      if (found_pol = policies.find { |pol| pol.name == name })
         resources[name].provider = found_pol
       end
     end
@@ -238,10 +240,10 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
       sids = []
       pv = policy_hash[:policy_value]
       pv.split(',').sort.each do |suser|
-        sids << if suser.match?(%r{^(\*S-1-.+)$})
-                  suser.to_s
+        sids << if suser !~ %r{^(\*S-1-.+)$}
+                  "*#{Puppet::Util::Windows::SID.name_to_sid(suser)}"
                 else
-                  '*' + Puppet::Util::Windows::SID.name_to_sid(suser).to_s
+                  suser.to_s
                 end
       end
       value = sids.sort.join(',')

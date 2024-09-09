@@ -5,8 +5,8 @@ require 'spec_helper_acceptance'
 describe 'local_security_policy', unless: UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
   ENV['no_proxy'] = default
   # test basic resources and idempotency
-  context 'with all local windows securit settings ' do
-    pp = <<-PP
+  context 'when all local windows securit settings ' do
+    pp = <<-LSP
     local_security_policy { 'Account lockout threshold':
       ensure       => 'present',
       policy_value => '10',
@@ -122,7 +122,7 @@ describe 'local_security_policy', unless: UNSUPPORTED_PLATFORMS.include?(fact('o
       ensure       => 'present',
       policy_value => 'enabled',
     }
-    PP
+    LSP
 
     it 'WinRM should be enabled also on Windows Server 2008' do
       r = command('winrm qc -force').stdout
@@ -130,7 +130,7 @@ describe 'local_security_policy', unless: UNSUPPORTED_PLATFORMS.include?(fact('o
       sleep(5)
     end
 
-    it 'works idempotently with no errors' do
+    it 'work idempotently with no errors' do
       # Run it twice and test for idempotency
       # apply_manifest_on_winrm(default,pp, :expect_failures => true)
       default.logger.notify 'This can take a while, so grab a coffee'
@@ -142,51 +142,53 @@ describe 'local_security_policy', unless: UNSUPPORTED_PLATFORMS.include?(fact('o
       it 'Export current Security Policy' do
         winrm_command(default, 'SecEdit /export /cfg c:\cfg.txt')
       end
+      # rubocop:disable Style/RegexpLiteral
 
       it 'Check MinimumPasswordAge' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "MinimumPasswordAge = 1"')[:stdout].delete("\n")
-        expect(r).to match(%r{MinimumPasswordAge = 1})
+        expect(r).to match(/MinimumPasswordAge = 1/)
       end
 
       it 'Check MaximumPasswordAge ' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "MaximumPasswordAge = 60"')[:stdout].delete("\n")
-        expect(r).to match(%r{MaximumPasswordAge = 60})
+        expect(r).to match(/MaximumPasswordAge = 60/)
       end
 
       it 'Check MinimumPasswordLength' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "MinimumPasswordLength = 14"')[:stdout].delete("\n")
-        expect(r).to match(%r{MinimumPasswordLength = 14})
+        expect(r).to match(/MinimumPasswordLength = 14/)
       end
 
       it 'Check PasswordComplexity ' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "PasswordComplexity = 1"')[:stdout].delete("\n")
-        expect(r).to match(%r{PasswordComplexity = 1})
+        expect(r).to match(/PasswordComplexity = 1/)
       end
 
       it 'Check PasswordHistorySize  ' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "PasswordHistorySize = 24"')[:stdout].delete("\n")
-        expect(r).to match(%r{PasswordHistorySize = 24})
+        expect(r).to match(/PasswordHistorySize = 24/)
       end
 
       it 'Check NewGuestName ' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "NewGuestName = "')[:stdout].delete("\n")
-        expect(r).to match(%r{NewGuestName = \"tseug\"})
+        expect(r).to match(/NewGuestName = \"tseug\"/)
       end
 
       it 'Check EnableGuestAccount' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "EnableGuestAccount = 0"')[:stdout].delete("\n")
-        expect(r).to match(%r{EnableGuestAccount = 0})
+        expect(r).to match(/EnableGuestAccount = 0/)
       end
 
       it 'Check ClearTextPassword' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "ClearTextPassword = 0"')[:stdout].delete("\n")
-        expect(r).to match(%r{ClearTextPassword = 0})
+        expect(r).to match(/ClearTextPassword = 0/)
       end
 
       it 'Check LockoutBadCount' do
         r = winrm_command(default, 'Select-String -Path C:\cfg.txt "LockoutBadCount = 10"')[:stdout].delete("\n")
-        expect(r).to match(%r{LockoutBadCount = 10})
+        expect(r).to match(/LockoutBadCount = 10/)
       end
+      # rubocop:enable Style/RegexpLiteral
     end
   end
 end

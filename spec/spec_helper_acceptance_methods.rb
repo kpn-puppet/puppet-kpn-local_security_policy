@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# rubocop:disable Style/PreferredHashMethods
+
 def clone_dependent_modules
   fixtures = YAML.load_file('.fixtures.yml')['fixtures']
   fixtures['repositories'].each do |module_name, value|
@@ -10,7 +12,7 @@ def clone_dependent_modules
         value
       end
     ref =
-      if value.is_a?(Hash) && value.key?('ref')
+      if value.is_a?(Hash) && value.has_key?('ref')
         value['ref']
       else
         'master'
@@ -25,3 +27,4 @@ def install_dependent_modules
     copy_module_to(hosts, source: "./spec/fixtures/modules/#{module_name}", module_name: module_name)
   end
 end
+# rubocop:enable Style/PreferredHashMethods

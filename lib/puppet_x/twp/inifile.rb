@@ -1,9 +1,13 @@
 # frozen_string_literal: true
 
-# This class represents the INI file and can be used to parse, modify
+require 'English'
+
+# This class represents the INI file and can be used to parse, modify,
 # and write INI files.
 module PuppetX
-  # class IniFile
+  Module.nesting
+  # This class represents the INI file and can be used to parse, modify,
+  # and write INI files.
   class IniFile
     include Enumerable
 
@@ -241,10 +245,10 @@ module PuppetX
     #   end
     #
     # Returns this IniFile.
-    def each_section
+    def each_section(&block)
       return unless block_given?
 
-      @ini.each_key { |section| yield section }
+      @ini.each_key(&block)
       self
     end
 
@@ -415,8 +419,7 @@ module PuppetX
     # object.
     class Parser
       attr_writer :section
-      attr_accessor :property
-      attr_accessor :value
+      attr_accessor :property, :value
 
       # Create a new IniFile::Parser that can be used to parse the contents of
       # an .ini file.
@@ -446,7 +449,7 @@ module PuppetX
       # Returns `true` if the current value starts with a leading double quote.
       # Otherwise returns false.
       def leading_quote?
-        value.start_with?('"')
+        value && value =~ %r{\A"}
       end
 
       # Given a string, attempt to parse out a value from that string. This
@@ -465,7 +468,7 @@ module PuppetX
         if leading_quote?
           # check for a closing quote at the end of the string
           if string =~ @close_quote
-            value << Regexp.last_match(1)
+            value << ::Regexp.last_match(1)
 
           # otherwise just append the string to the value
           else
@@ -477,18 +480,18 @@ module PuppetX
         else
           case string
           when @full_quote
-            self.value = Regexp.last_match(1)
+            self.value = ::Regexp.last_match(1)
 
           when @open_quote
-            self.value = Regexp.last_match(1)
+            self.value = ::Regexp.last_match(1)
             continuation = true
 
           when @trailing_slash
-            value ? value << Regexp.last_match(1) : self.value = Regexp.last_match(1)
+            value ? value << ::Regexp.last_match(1) : self.value = ::Regexp.last_match(1)
             continuation = true
 
           when @normal_value
-            value ? value << Regexp.last_match(1) : self.value = Regexp.last_match(1)
+            value ? value << ::Regexp.last_match(1) : self.value = ::Regexp.last_match(1)
 
           else
             error
@@ -529,12 +532,12 @@ module PuppetX
             when @ignore_regexp
               nil
             when @section_regexp
-              self.section = @hash[Regexp.last_match(1)]
+              self.section = @hash[::Regexp.last_match(1)]
             when @property_regexp
-              self.property = Regexp.last_match(1).strip
+              self.property = ::Regexp.last_match(1).strip
               error if property.empty?
 
-              continuation = parse_value Regexp.last_match(2)
+              continuation = parse_value ::Regexp.last_match(2)
             else
               error
             end
@@ -562,7 +565,7 @@ module PuppetX
         property.strip!
         value.strip!
 
-        self.value = Regexp.last_match(1) if value =~ %r{\A"(.*)(?<!\\)"\z}m
+        self.value = ::Regexp.last_match(1) if value =~ %r{\A"(.*)(?<!\\)"\z}m
 
         section[property] = typecast(value)
 
@@ -625,13 +628,13 @@ module PuppetX
       def unescape_value(value)
         value = value.to_s
         value.gsub!(%r{\\[0nrt\\]}) do |char|
-          case char
-          when '\0' then   "\0"
-          when '\n' then   "\n"
-          when '\r' then   "\r"
-          when '\t' then   "\t"
-          when '\\\\' then '\\'
-          end
+          {
+            '\0' => "\0",
+            '\n' => "\n",
+            '\r' => "\r",
+            '\t' => "\t",
+            '\\\\' => '\\',
+          }[char]
         end
         value
       end

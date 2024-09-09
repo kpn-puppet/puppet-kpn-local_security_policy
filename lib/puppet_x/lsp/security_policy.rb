@@ -3,18 +3,24 @@
 require 'puppet/provider'
 require 'puppet/util'
 
-# class SecurityPolicy
+# This class is used to convert the policy values to the format that secedit.exe expects
+# It also contains the mapping of the policy names to the registry keys
+# This class is used by the local_security_policy type
 class SecurityPolicy
   EVENT_TYPES = ['Success,Failure', 'Success', 'Failure', 'No auditing'].freeze
-  STATE_TYPES = ['enabled', 'disabled'].freeze
+  STATE_TYPES = %w[enabled disabled].freeze
 
-  def user_to_sid(value)
-    '*' + Puppet::Util::Windows::SID.name_to_sid(value)
+  def self.user_to_sid(value)
+    name = Puppet::Util::Windows::SID.name_to_sid(value)
+    return value unless name
+
+    "*#{Puppet::Util::Windows::SID.name_to_sid(value)}"
   end
 
   def convert_privilege_right(ensure_value, policy_value)
     # we need to convert users to sids first
     if ensure_value.to_s == 'absent'
+      ''
     else
       sids = []
       policy_value.split(',').sort.each do |suser|
@@ -26,20 +32,20 @@ class SecurityPolicy
   end
 
   # converts the policy value inside the policy hash to conform to the secedit standards
-  # def convert_policy_hash(policy_hash)
-  #     case policy_hash[:policy_type]
-  #         when 'Privilege Rights'
-  #             value = convert_privilege_right(policy_hash[:ensure], policy_hash[:policy_value])
-  #         when 'Event Audit'
-  #             value = event_to_audit_id(policy_hash[:policy_value])
-  #         when 'Registry Values'
-  #             value = SecurityPolicy.convert_registry_value(policy_hash[:name], policy_hash[:policy_value])
-  #         else
-  #             value = policy_hash[:policy_value]
-  #     end
-  #     policy_hash[:policy_value] = value
-  #     policy_hash
-  # end
+  def self.convert_policy_hash(policy_hash)
+    value = case policy_hash[:policy_type]
+            when 'Privilege Rights'
+              convert_privilege_right(policy_hash[:ensure], policy_hash[:policy_value])
+            when 'Event Audit'
+              event_to_audit_id(policy_hash[:policy_value])
+            when 'Registry Values'
+              SecurityPolicy.convert_registry_value(policy_hash[:name], policy_hash[:policy_value])
+            else
+              policy_hash[:policy_value]
+            end
+    policy_hash[:policy_value] = value
+    policy_hash
+  end
 
   # Converts a event number to a word
   def self.event_audit_mapper(policy_value)
@@ -82,18 +88,16 @@ class SecurityPolicy
   # returns the key and hash value given the policy desc
   def self.find_mapping_from_policy_desc(desc)
     name = desc.downcase
-    _key, value = lsp_mapping.find do |key, _hash|
+    _, value = lsp_mapping.find do |key, _hash|
       key.downcase == name
     end
-    unless value
-      raise KeyError, "#{desc} is not a valid policy"
-    end
+    raise KeyError, "#{desc} is not a valid policy" unless value
 
     value
   end
 
   def self.valid_lsp?(name)
-    lsp_mapping.key?(name)
+    lsp_mapping.keys.include?(name)
   end
 
   def self.convert_registry_value(name, value)
@@ -110,6 +114,7 @@ class SecurityPolicy
     # I would rather not have to look this info up, but the type code will not always have this info handy
     # without knowing the policy type we can't figure out what to convert
     policy_type = find_mapping_from_policy_desc(policy_hash[:name])[:policy_type]
+    puts policy_type
     case policy_type.to_s
     when 'Privilege Rights'
       value = sp.convert_privilege_right(policy_hash[:ensure], value)
@@ -125,13 +130,22 @@ class SecurityPolicy
     policy_hash = find_mapping_from_policy_desc(resource_hash[:name])
     case policy_hash[:policy_type]
     when 'Event Audit'
-      raise ArgumentError, "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', should be one of '#{SecurityPolicy::EVENT_TYPES.join(', ')}'" unless SecurityPolicy::EVENT_TYPES.include?(value)
+      unless SecurityPolicy::EVENT_TYPES.include?(value)
+        raise ArgumentError,
+              "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', should be one of '#{SecurityPolicy::EVENT_TYPES.join(', ')}'"
+      end
     when 'System Access', 'Registry Values'
       case policy_hash[:data_type]
       when :boolean
-        raise ArgumentError, "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', should be one of '#{SecurityPolicy::STATE_TYPES.join(', ')}'" unless SecurityPolicy::STATE_TYPES.include?(value)
+        unless SecurityPolicy::STATE_TYPES.include?(value)
+          raise ArgumentError,
+                "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', should be one of '#{SecurityPolicy::STATE_TYPES.join(', ')}'"
+        end
       when :multi_select
-        raise ArgumentError, "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', should be one of '#{policy_hash[:policy_options].values.join(', ')}'" unless policy_hash[:policy_options].value?(value)
+        unless policy_hash[:policy_options].values.include?(value)
+          raise ArgumentError,
+                "Invalid policy value: '#{value}' for '#{resource_hash[:name]}', should be one of '#{policy_hash[:policy_options].values.join(', ')}'"
+        end
       end
     end
   end
@@ -169,6 +183,12 @@ class SecurityPolicy
         data_type: :boolean,
         policy_default: 'enabled',
       },
+      'Relax minimum password length limits' => {
+        name: 'MACHINE\System\CurrentControlSet\Control\SAM\RelaxMinimumPasswordLengthLimits',
+        reg_type: '4',
+        policy_type: 'Registry Values',
+        data_type: :boolean,
+      },
       'Store passwords using reversible encryption' => {
         name: 'ClearTextPassword',
         policy_type: 'System Access',
@@ -186,6 +206,12 @@ class SecurityPolicy
         policy_type: 'System Access',
         data_type: :integer,
         policy_default: '0',
+      },
+      'Allow Administrator account lockout' => {
+        name: 'AllowAdministratorLockout',
+        policy_type: 'System Access',
+        data_type: :boolean,
+        policy_default: '1',
       },
       'Reset account lockout counter after' => {
         name: 'ResetLockoutCount',
@@ -472,9 +498,11 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'This policy is disabled',
-                          '1' => 'Users can`t add Microsoft accounts',
-                          '3' => 'Users can`t add or log on with Microsoft accounts' },
+        policy_options: {
+          '0' => 'This policy is disabled',
+          '1' => 'Users can`t add Microsoft accounts',
+          '3' => 'Users can`t add or log on with Microsoft accounts',
+        },
       },
       'Accounts: Guest account status' => {
         name: 'EnableGuestAccount',
@@ -547,9 +575,11 @@ class SecurityPolicy
         reg_type: '1',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'Administrators',
-                          '1' => 'Administrators and Power Users',
-                          '2' => 'Administrators and Interactive Users' },
+        policy_options: {
+          '0' => 'Administrators',
+          '1' => 'Administrators and Power Users',
+          '2' => 'Administrators and Interactive Users',
+        },
       },
       'Devices: Prevent users from installing printer drivers' => {
         name: 'MACHINE\System\CurrentControlSet\Control\Print\Providers\LanMan Print Services\Servers\AddPrinterDrivers',
@@ -610,9 +640,11 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '1' => 'User display name, domain and user names',
-                          '2' => 'User display name only',
-                          '3' => 'Do not display user information' },
+        policy_options: {
+          '1' => 'User display name, domain and user names',
+          '2' => 'User display name only',
+          '3' => 'Do not display user information',
+        },
       },
       'Interactive logon: Do not display last user name' => {
         name: 'MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System\DontDisplayLastUserName',
@@ -667,10 +699,12 @@ class SecurityPolicy
         reg_type: '1',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'No Action',
-                          '1' => 'Lock Workstation',
-                          '2' => 'Force Logoff',
-                          '3' => 'Disconnect if a Remote Desktop Services session' },
+        policy_options: {
+          '0' => 'No Action',
+          '1' => 'Lock Workstation',
+          '2' => 'Force Logoff',
+          '3' => 'Disconnect if a Remote Desktop Services session',
+        },
       },
       'Interactive logon: Machine inactivity limit' => {
         name: 'MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System\InactivityTimeoutSecs',
@@ -731,9 +765,11 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'Off',
-                          '1' => 'Accept if provided by client',
-                          '2' => 'Required from client' },
+        policy_options: {
+          '0' => 'Off',
+          '1' => 'Accept if provided by client',
+          '2' => 'Required from client',
+        },
       },
       'Network access: Allow anonymous SID/name translation' => {
         name: 'LSAAnonymousNameLookup',
@@ -805,8 +841,10 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'Classic - local users authenticate as themselves',
-                          '1' => 'Guest only - local users authenticate as Guest' },
+        policy_options: {
+          '0' => 'Classic - local users authenticate as themselves',
+          '1' => 'Guest only - local users authenticate as Guest',
+        },
       },
       'Network security: Allow Local System to use computer identity for NTLM' => {
         name: 'MACHINE\System\CurrentControlSet\Control\Lsa\UseMachineId',
@@ -831,69 +869,71 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '1 ' => 'DES_CBC_CRC',
-                          '2 ' => 'DES_CBC_MB5',
-                          '3 ' => 'DES_CBC_CRC,DES_CBC_MB5,',
-                          '4 ' => 'RC4_HMAC_MD5',
-                          '5 ' => 'DES_CBC_CRC,RC4_HMAC_MD5,',
-                          '6 ' => 'DES_CBC_MB5,RC4_HMAC_MD5,',
-                          '7 ' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,',
-                          '8 ' => 'AES128_HMAC_SHA1',
-                          '9 ' => 'DES_CBC_CRC,AES128_HMAC_SHA1,',
-                          '10' => 'DES_CBC_MB5,AES128_HMAC_SHA1,',
-                          '11' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,',
-                          '12' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,',
-                          '13' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,',
-                          '14' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,',
-                          '15' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,',
-                          '16' => 'AES256_HMAC_SHA1',
-                          '17' => 'DES_CBC_CRC,AES256_HMAC_SHA1,',
-                          '18' => 'DES_CBC_MB5,AES256_HMAC_SHA1,',
-                          '19' => 'DES_CBC_CRC,DES_CBC_MB5,AES256_HMAC_SHA1,',
-                          '20' => 'RC4_HMAC_MD5,AES256_HMAC_SHA1,',
-                          '21' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES256_HMAC_SHA1,',
-                          '22' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,',
-                          '23' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,',
-                          '24' => 'AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '25' => 'DES_CBC_CRC,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '26' => 'DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '27' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '28' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '29' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '30' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '31' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
-                          '2147483616' => 'Future encryption types',
-                          '2147483617' => 'DES_CBC_CRC,Future encryption types',
-                          '2147483618' => 'DES_CBC_MB5,Future encryption types',
-                          '2147483619' => 'DES_CBC_CRC,DES_CBC_MB5,Future encryption types',
-                          '2147483620' => 'RC4_HMAC_MD5,Future encryption types',
-                          '2147483621' => 'DES_CBC_CRC,RC4_HMAC_MD5,Future encryption types',
-                          '2147483622' => 'DES_CBC_MB5,RC4_HMAC_MD5,Future encryption types',
-                          '2147483623' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,Future encryption types',
-                          '2147483624' => 'AES128_HMAC_SHA1,Future encryption types',
-                          '2147483625' => 'DES_CBC_CRC,AES128_HMAC_SHA1,Future encryption types',
-                          '2147483626' => 'DES_CBC_MB5,AES128_HMAC_SHA1,Future encryption types',
-                          '2147483627' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,Future encryption types',
-                          '2147483628' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
-                          '2147483629' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
-                          '2147483630' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
-                          '2147483631' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
-                          '2147483632' => 'AES256_HMAC_SHA1,Future encryption types',
-                          '2147483633' => 'DES_CBC_CRC,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483634' => 'DES_CBC_MB5,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483635' => 'DES_CBC_CRC,DES_CBC_MB5,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483636' => 'RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483637' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483638' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483639' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483640' => 'AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483641' => 'DES_CBC_CRC,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483642' => 'DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483643' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483644' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483645' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483646' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
-                          '2147483647' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types' },
+        policy_options: {
+          '1 ' => 'DES_CBC_CRC',
+          '2 ' => 'DES_CBC_MB5',
+          '3 ' => 'DES_CBC_CRC,DES_CBC_MB5,',
+          '4 ' => 'RC4_HMAC_MD5',
+          '5 ' => 'DES_CBC_CRC,RC4_HMAC_MD5,',
+          '6 ' => 'DES_CBC_MB5,RC4_HMAC_MD5,',
+          '7 ' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,',
+          '8 ' => 'AES128_HMAC_SHA1',
+          '9 ' => 'DES_CBC_CRC,AES128_HMAC_SHA1,',
+          '10' => 'DES_CBC_MB5,AES128_HMAC_SHA1,',
+          '11' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,',
+          '12' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,',
+          '13' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,',
+          '14' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,',
+          '15' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,',
+          '16' => 'AES256_HMAC_SHA1',
+          '17' => 'DES_CBC_CRC,AES256_HMAC_SHA1,',
+          '18' => 'DES_CBC_MB5,AES256_HMAC_SHA1,',
+          '19' => 'DES_CBC_CRC,DES_CBC_MB5,AES256_HMAC_SHA1,',
+          '20' => 'RC4_HMAC_MD5,AES256_HMAC_SHA1,',
+          '21' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES256_HMAC_SHA1,',
+          '22' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,',
+          '23' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,',
+          '24' => 'AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '25' => 'DES_CBC_CRC,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '26' => 'DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '27' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '28' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '29' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '30' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '31' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,',
+          '2147483616' => 'Future encryption types',
+          '2147483617' => 'DES_CBC_CRC,Future encryption types',
+          '2147483618' => 'DES_CBC_MB5,Future encryption types',
+          '2147483619' => 'DES_CBC_CRC,DES_CBC_MB5,Future encryption types',
+          '2147483620' => 'RC4_HMAC_MD5,Future encryption types',
+          '2147483621' => 'DES_CBC_CRC,RC4_HMAC_MD5,Future encryption types',
+          '2147483622' => 'DES_CBC_MB5,RC4_HMAC_MD5,Future encryption types',
+          '2147483623' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,Future encryption types',
+          '2147483624' => 'AES128_HMAC_SHA1,Future encryption types',
+          '2147483625' => 'DES_CBC_CRC,AES128_HMAC_SHA1,Future encryption types',
+          '2147483626' => 'DES_CBC_MB5,AES128_HMAC_SHA1,Future encryption types',
+          '2147483627' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,Future encryption types',
+          '2147483628' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
+          '2147483629' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
+          '2147483630' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
+          '2147483631' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,Future encryption types',
+          '2147483632' => 'AES256_HMAC_SHA1,Future encryption types',
+          '2147483633' => 'DES_CBC_CRC,AES256_HMAC_SHA1,Future encryption types',
+          '2147483634' => 'DES_CBC_MB5,AES256_HMAC_SHA1,Future encryption types',
+          '2147483635' => 'DES_CBC_CRC,DES_CBC_MB5,AES256_HMAC_SHA1,Future encryption types',
+          '2147483636' => 'RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
+          '2147483637' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
+          '2147483638' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
+          '2147483639' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES256_HMAC_SHA1,Future encryption types',
+          '2147483640' => 'AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+          '2147483641' => 'DES_CBC_CRC,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+          '2147483642' => 'DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+          '2147483643' => 'DES_CBC_CRC,DES_CBC_MB5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+          '2147483644' => 'RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+          '2147483645' => 'DES_CBC_CRC,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+          '2147483646' => 'DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+          '2147483647' => 'DES_CBC_CRC,DES_CBC_MB5,RC4_HMAC_MD5,AES128_HMAC_SHA1,AES256_HMAC_SHA1,Future encryption types',
+        },
       },
       'Network security: Do not store LAN Manager hash value on next password change' => {
         name: 'MACHINE\System\CurrentControlSet\Control\Lsa\NoLMHash',
@@ -912,39 +952,47 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'Send LM & NTLM responses',
-                          '1' => 'Send LM & NTLM - use NTLMv2 session security if negotiated',
-                          '2' => 'Send NTLM response only',
-                          '3' => 'Send NTLMv2 response only',
-                          '4' => 'Send NTLMv2 response only. Refuse LM',
-                          '5' => 'Send NTLMv2 response only. Refuse LM & NTLM' },
+        policy_options: {
+          '0' => 'Send LM & NTLM responses',
+          '1' => 'Send LM & NTLM - use NTLMv2 session security if negotiated',
+          '2' => 'Send NTLM response only',
+          '3' => 'Send NTLMv2 response only',
+          '4' => 'Send NTLMv2 response only. Refuse LM',
+          '5' => 'Send NTLMv2 response only. Refuse LM & NTLM',
+        },
       },
       'Network security: LDAP client signing requirements' => {
         name: 'MACHINE\System\CurrentControlSet\Services\LDAP\LDAPClientIntegrity',
         policy_type: 'Registry Values',
         reg_type: '4',
         data_type: :multi_select,
-        policy_options: { '0' => 'None',
-                          '1' => 'Negotiate signing',
-                          '2' => 'Require signing' },
+        policy_options: {
+          '0' => 'None',
+          '1' => 'Negotiate signing',
+          '2' => 'Require signing',
+        },
       },
       'Network security: Minimum session security for NTLM SSP based (including secure RPC) clients' => {
         name: 'MACHINE\System\CurrentControlSet\Control\Lsa\MSV1_0\NTLMMinClientSec',
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '524288' => 'Require NTLMv2 session security',
-                          '536870912' => 'Require 128-bit encryption',
-                          '537395200' => 'Require NTLMv2 session security,Require 128-bit encryption' },
+        policy_options: {
+          '524288' => 'Require NTLMv2 session security',
+          '536870912' => 'Require 128-bit encryption',
+          '537395200' => 'Require NTLMv2 session security,Require 128-bit encryption',
+        },
       },
       'Network security: Minimum session security for NTLM SSP based (including secure RPC) servers' => {
         name: 'MACHINE\System\CurrentControlSet\Control\Lsa\MSV1_0\NTLMMinServerSec',
         policy_type: 'Registry Values',
         reg_type: '4',
         data_type: :multi_select,
-        policy_options: { '524288' => 'Require NTLMv2 session security',
-                          '536870912' => 'Require 128-bit encryption',
-                          '537395200' => 'Require NTLMv2 session security,Require 128-bit encryption' },
+        policy_options: {
+          '524288' => 'Require NTLMv2 session security',
+          '536870912' => 'Require 128-bit encryption',
+          '537395200' => 'Require NTLMv2 session security,Require 128-bit encryption',
+        },
       },
       'Recovery console: Allow automatic administrative logon' => {
         name: 'MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Setup\RecoveryConsole\SecurityLevel',
@@ -975,9 +1023,11 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'User input is not required when new keys are stored and used',
-                          '1' => 'User is prompted when the key is first used',
-                          '2' => 'User must enter a password each time they use a key' },
+        policy_options: {
+          '0' => 'User input is not required when new keys are stored and used',
+          '1' => 'User is prompted when the key is first used',
+          '2' => 'User must enter a password each time they use a key',
+        },
       },
       'System cryptography: Use FIPS compliant algorithms for encryption, hashing, and signing' => {
         name: 'MACHINE\System\CurrentControlSet\Control\Lsa\FIPSAlgorithmPolicy\Enabled',
@@ -1027,21 +1077,25 @@ class SecurityPolicy
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'Elevate without prompting',
-                          '1' => 'Prompt for credentials on the secure desktop',
-                          '2' => 'Prompt for consent on the secure desktop',
-                          '3' => 'Prompt for credentials',
-                          '4' => 'Prompt for consent',
-                          '5' => 'Prompt for consent for non-Windows binaries' },
+        policy_options: {
+          '0' => 'Elevate without prompting',
+          '1' => 'Prompt for credentials on the secure desktop',
+          '2' => 'Prompt for consent on the secure desktop',
+          '3' => 'Prompt for credentials',
+          '4' => 'Prompt for consent',
+          '5' => 'Prompt for consent for non-Windows binaries',
+        },
       },
       'User Account Control: Behavior of the elevation prompt for standard users' => {
         name: 'MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System\ConsentPromptBehaviorUser',
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '0' => 'Automatically deny elevation requests',
-                          '1' => 'Prompt for credentials on the secure desktop',
-                          '3' => 'Prompt for credentials' },
+        policy_options: {
+          '0' => 'Automatically deny elevation requests',
+          '1' => 'Prompt for credentials on the secure desktop',
+          '3' => 'Prompt for credentials',
+        },
       },
       'User Account Control: Detect application installations and prompt for elevation' => {
         name: 'MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System\EnableInstallerDetection',
@@ -1094,13 +1148,27 @@ class SecurityPolicy
         data_type: :boolean,
         policy_default: 'disabled',
       },
+      # Settings for Domain Controllers
+      'Domain controller: LDAP server channel binding token requirements' => {
+        name: 'MACHINE\System\CurrentControlSet\Services\NTDS\Parameters\LdapEnforceChannelBinding',
+        reg_type: '4',
+        policy_type: 'Registry Values',
+        data_type: :multi_select,
+        policy_options: {
+          '0' => 'Never',
+          '1' => 'When supported',
+          '2' => 'Always',
+        },
+      },
       'Domain controller: LDAP server signing requirements' => {
         name: 'MACHINE\System\CurrentControlSet\Services\NTDS\Parameters\LDAPServerIntegrity',
         reg_type: '4',
         policy_type: 'Registry Values',
         data_type: :multi_select,
-        policy_options: { '1' => 'none',
-                          '2' => 'Require signing' },
+        policy_options: {
+          '1' => 'none',
+          '2' => 'Require signing',
+        },
       },
       'Domain controller: Refuse machine account password changes' => {
         name: 'MACHINE\System\CurrentControlSet\Services\Netlogon\Parameters\RefusePasswordChange',

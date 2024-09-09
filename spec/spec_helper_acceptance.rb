@@ -3,12 +3,12 @@
 require 'beaker-rspec'
 require 'beaker/puppet_install_helper'
 require 'beaker-rspec/helpers/serverspec'
-require_relative 'spec_helper_acceptance_winrm.rb'
-require_relative 'spec_helper_acceptance_methods.rb'
+require_relative 'spec_helper_acceptance_winrm'
+require_relative 'spec_helper_acceptance_methods'
 
 UNSUPPORTED_PLATFORMS = [].freeze
 
-unless (ENV['RS_PROVISION'] == 'no') || (ENV['BEAKER_provision'] == 'no')
+unless ENV['RS_PROVISION'] == 'no' || ENV['BEAKER_provision'] == 'no'
   # Install Puppet Enterprise Agent
   run_puppet_install_helper
 

@@ -5,7 +5,7 @@ begin
 rescue LoadError => e
   require 'pathname' # JJM WORK_AROUND #14073
   module_base = Pathname.new(__FILE__).dirname
-  require module_base + '../../' + 'puppet_x/lsp/security_policy.rb'
+  require "#{module_base}../../puppet_x/lsp/security_policy.rb"
 end
 
 Puppet::Type.newtype(:local_security_policy) do

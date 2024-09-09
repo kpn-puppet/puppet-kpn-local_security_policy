@@ -36,7 +36,7 @@ describe Puppet::Type.type(:local_security_policy) do
           policy_type: 'Event Audit',
           policy_value: 'xuccess,Failure',
         )
-      } .to raise_error(Puppet::ResourceError)
+      }.to raise_error(Puppet::ResourceError)
     end
   end
 end

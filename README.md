@@ -1,54 +1,33 @@
-# local security policy
+# Puppet Local Security Policy
 
-This module was forked from [git@github.com:logicminds/local_security_policy.git](git@github.com:logicminds/local_security_policy.git)
-
-#### Table of Contents
-
-1. [Module Description](#module-description)
-1. [Local_security_policy features](#local_security_policy-features)
-    * [Account Policy](#account-policy)
-    * [Local Policy](#local-policy)
-1. [Usage](#usage)
-    * [Setting or merging User Rights](Setting-or-merging-User-Rights)
-    * [Listing all local security policies](#listing-all-local-security-policies)
-    * [Examples](#examples)
-      * [Example Password Policy](#example-password-policy)
-      * [Example Audit Policy](#example-audit-policy)
-      * [Example User Rights Policy](#example-user-rights-policy)
-      * [Example Security Settings](#example-security-settings)
-    * [Full list of settings available](#full-list-of-settings-available)
-1. [How this works](#how-this-works)
-1. [Limitations - OS compatibility, etc.](#limitations)
-1. [Development - Guide for contributing to the module](#development)
-
-## Overview
-This module sets and enforces the local security policies for windows.
-
-## Module Description
-This module uses secedit.exe to configure the local security policies on Windows. 
-Secedit can configure and analyze system security by comparing the current configuration to specified security templates.
+Forked from [git@github.com:logicminds/local_security_policy.git](git@github.com:logicminds/local_security_policy.git)
 
 ## Local_security_policy features
-Configure local security policy (LSP) for windows servers.
+
+Configure, local security policy (LSP) for windows servers.
 LSP is key to a baseline configuration of the following security features:
 
 ### Account Policy
-  * Password Policy
-  * Account Lockout Policy
+
+- Password Policy
+- Account Lockout Policy
 
 ### Local Policy
-  * Audit Policy
-  * User Rights Assignment
-  * Security Options
-  * Registry Values
+
+- Audit Policy
+- User Rights Assignment
+- Security Options
+- Registry Values
 
 This module uses types and providers to list, update, validate settings
 
-## Usage
+## Use
+
 The title and name of the resources is an exact match of what is in `secpol.msc` GUI. If you are uncertain of the setting name and values just use `puppet resource local_security_policy` to list all configured settings.
 
 A block will look like this:
-```
+
+``` puppet
 local_security_policy { 'Audit account logon events': <- Title / Name
   ensure         => present,              <- Usually set to present. Can be set to absent for some policy settings.
   policy_setting => "AuditAccountLogon",  <- The secedit file key. Informational purposes only, not for use in manifest definitions
@@ -57,34 +36,36 @@ local_security_policy { 'Audit account logon events': <- Title / Name
 }
 ```
 
-### Setting or merging User Rights
-With `Privilege Rights` it is possible to `set:` the value or to `merge:` the values.
-When using the `set:` option, the `policy_value` is set as the desired value. Do not use '+' or '-' when using `set:`.
-When using the `merge:` option, the `policy_value` is merged with the existing value. '+' will add a value and '-' will remove a value.
-If you do not use `set:` or `merge:` then `set:` will be the default.
+### Listing all settings
 
-### Listing all local security policies
 Show all local_security_policy resources available on server
-```
+
+``` cmd
 puppet resource local_security_policy
 ```
+
 Show a single local_security_policy resources available on server
-```
+
+``` cmd
 puppet resource local_security_policy 'Maximum password age'
 ```
 
-### Examples
+### More examples
+
 #### Example Password Policy
-```
+
+``` puppet
 local_security_policy { 'Maximum password age':
   ensure       => 'present',
   policy_value => '90',
 }
 ```
+
 Sets the policy_value of 'Maximum password age' to '90'.
 
 #### Example Audit Policy
-```
+
+``` puppet
 local_security_policy { 'Audit account logon events':
   ensure       => 'present',
   policy_value => 'Success,Failure',
@@ -92,32 +73,24 @@ local_security_policy { 'Audit account logon events':
 ```
 
 #### Example User Rights Policy
-```
+
+``` puppet
 local_security_policy { 'Allow log on locally':
   ensure       => present,
   policy_value => 'Administrators, MyDomain\Domain Admins',
 }
 ```
 
-Administrators and Remote Desktop Users will be set:
-```
+``` puppet
 local_security_policy { 'Allow log on through Remote Desktop Services':
   ensure       => 'present',
-  policy_value => 'set: Administrators, Remote Desktop Users',
-}
-```
-
-Administrators and Remote Desktop Users will be added and Power Users will be removed:
-```
-local_security_policy { 'Allow log on through Remote Desktop Services':
-  ensure       => 'present',
-  policy_value => 'merge: Administrators, +Remote Desktop Users, -Power Users',
+  policy_value => 'Administrators,Remote Desktop Users',
 }
 ```
 
 #### Example Security Settings
 
-```
+``` puppet
 local_security_policy { 'System cryptography: Use FIPS compiant algorithms for encryption, hashing, and signing':
   ensure       => 'present',
   policy_value => 'enabled',
@@ -125,21 +98,23 @@ local_security_policy { 'System cryptography: Use FIPS compiant algorithms for e
 ```
 
 When you can select an option, specify the exact option as displayed in the `secpol.msc` GUI.
-```
+
+``` puppet
 local_security_policy { 'User Account Control: Behavior of the elevation prompt for administrators in Admin Approval Mode':
   ensure       => 'present',
   policy_value => 'Elevate without prompting',
 }
 ```
 
-
 ### Full list of settings available
-```
+
+``` puppet
 Enforce password history
 Maximum password age
 Minimum password age
 Minimum password length
 Password must meet complexity requirements
+Relax minimum password length limits
 Store passwords using reversible encryption
 Account lockout duration
 Account lockout threshold
@@ -213,6 +188,10 @@ Devices: Allowed to format and eject removable media
 Devices: Prevent users from installing printer drivers
 Devices: Restrict CD-ROM access to locally logged-on user only
 Devices: Restrict floppy access to locally logged-on user only
+Domain controller: Allow server operators to schedule tasks
+Domain controller: LDAP server channel binding token requirements
+Domain controller: LDAP server signing requirements
+Domain controller: Refuse machine account password changes
 Domain member: Digitally encrypt or sign secure channel data (always)
 Domain member: Digitally encrypt secure channel data (when possible)
 Domain member: Digitally sign secure channel data (when possible)
@@ -279,6 +258,7 @@ User Account Control: Virtualize file and registry write failures to per-user lo
 ```
 
 ## How this works
+
 The local_security_policy works by using `secedit /export` to export a list of currently set policies.  The module will then
 take the user defined resource and compare the values against the exported policies.  If the values on the system do not match
 the defined resource, the module will run `secedit /configure` to configure the policy on the system.  If the policy already
@@ -289,7 +269,7 @@ of a policy and placed them in a map for easy translation and value conversion. 
 instead of the sid value, as well as the policy description instead of the special key that needs to be set.  The mappings
 below define how this translation works.  If there is no map for your policy you will need to add to `lib/puppet_x/lsp/security_policy.rb`
 
-```
+``` puppet
 'Accounts: Rename administrator account' => {
   :name        => 'NewAdministratorName',
   :policy_type => 'System Access',
@@ -302,13 +282,13 @@ below define how this translation works.  If there is no map for your policy you
 },
 ```
 
-The key `Accounts: Rename administrator account ` in the first hash is what the user will define as the name in the resource name.
+The key `Accounts: Rename administrator account` in the first hash is what the user will define as the name in the resource name.
 Instead of remembering the policy name, the description will help us remember what the policy is for.  When defining new policy
 maps you will need to define the key, name, policy_type, and optionally, data_type or reg_type.
 
 Currently for data_type there is `:string`, `:integer`, `:boolean` or `:multi_select`.  For reg_type (integer value) there are many values which are listed below:
 
-```
+``` puppet
     REG_NONE 0
     REG_SZ 1
     REG_EXPAND_SZ 2
@@ -325,26 +305,6 @@ Currently for data_type there is `:string`, `:integer`, `:boolean` or `:multi_se
     REG_QWORD_LITTLE_ENDIAN 11
 ```
 
-## Limitations
-This is where you list OS compatibility, version compatibility, etc.
+## TODO: Future release
 
-This module works on:
-
-- Windows 2008 R2
-- Windows 2012 R2
-- Windows 2016
-
-## Development
-
-You can contribute by submitting issues, providing feedback and joining the discussions.
-
-Go to: `https://github.com/kpn-puppet/puppet-kpn-local_security_policy`
-
-If you want to fix bugs, add new features etc:
-- Fork it
-- Create a feature branch ( git checkout -b my-new-feature )
-- Apply your changes and update rspec tests
-- Run rspec tests ( bundle exec rake spec )
-- Commit your changes ( git commit -am 'Added some feature' )
-- Push to the branch ( git push origin my-new-feature )
-- Create new Pull Request
+- Handle unsupported policies

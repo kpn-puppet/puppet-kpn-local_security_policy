@@ -6,25 +6,89 @@ require 'puppet/util'
 begin
   require 'puppet_x/twp/inifile'
   require 'puppet_x/lsp/security_policy'
-rescue LoadError => _detail
+rescue LoadError
   require 'pathname' # JJM WORK_AROUND #14073
   module_base = Pathname.new(__FILE__).dirname
-  require module_base + '../../../' + 'puppet_x/twp/inifile.rb'
-  require module_base + '../../../' + 'puppet_x/lsp/security_policy.rb'
+  require "#{module_base}../../../puppet_x/twp/inifile.rb"
+  require "#{module_base}../../../puppet_x/lsp/security_policy.rb"
 end
 
 Puppet::Type.type(:local_security_policy).provide(:policy) do
   desc 'Puppet type that models the local security policy'
 
   # TODO: Finalize the registry key settings
-  # TODO: Add in registry value translation (ex: 1=enable 0=disable)
-  # TODO: Implement self.post_resource_eval (need to collect all resource updates the run secedit to make one call)
+  # TODO Add in registry value translation (ex: 1=enable 0=disable)
+  # TODO Implement self.post_resource_eval (need to collect all resource updates the run secedit to make one call)
   # limit access to windows hosts only
   confine    osfamily: :windows
   defaultfor osfamily: :windows
   # limit access to systems with these commands since this is the tools we need
   commands secedit: 'secedit', reg: 'reg'
+
   mk_resource_methods
+
+  # export the policy settings to the specified file and return the filename
+  def self.export_policy_settings(inffile = nil)
+    inffile ||= temp_file
+    secedit(['/export', '/cfg', inffile, '/quiet'])
+    inffile
+  end
+
+  # export and then read the policy settings from a file into a inifile object
+  # caches the IniFile object during the puppet run
+  def self.read_policy_settings(inffile = nil)
+    inffile ||= temp_file
+    unless @file_object
+      export_policy_settings(inffile)
+      File.open inffile, 'r:IBM437' do |file|
+        # remove /r/n and remove the BOM
+        inffile_content = file.read.force_encoding('utf-16le').encode('utf-8', universal_newline: true).gsub(
+          "\xEF\xBB\xBF", ''
+        )
+        @file_object ||= PuppetX::IniFile.new(content: inffile_content)
+      end
+    end
+    @file_object
+  end
+
+  def self.return_actual_policy_value(value, reg_type)
+    case reg_type
+    when '1'
+      value.gsub('"', '').split(',').drop(1).join(',')
+    else
+      value.split(',').drop(1).join(',')
+    end
+  end
+
+  # converts any values that might be of a certain type specified in the mapping
+  # converts everything to a string
+  # returns the value
+  def self.translate_value(value, policy_values)
+    value = value.to_s.strip
+    case policy_values[:policy_type]
+    when 'Registry Values'
+      value = return_actual_policy_value(value, policy_values[:reg_type])
+    when 'Event Audit'
+      value = SecurityPolicy.event_audit_mapper(value)
+    when 'Privilege Rights'
+      sids = []
+      value.split(',').sort.each do |suser|
+        sids << if suser !~ %r{^(\*S-1-.+)$}
+                  "*#{Puppet::Util::Windows::SID.name_to_sid(suser)}"
+                else
+                  suser.to_s
+                end
+      end
+      value = sids.sort.join(',')
+    end
+    case policy_values[:data_type]
+    when :boolean
+      value = value.to_i.positive? ? 'enabled' : 'disabled'
+    when :multi_select
+      value = policy_values[:policy_options][value]
+    end
+    value
+  end
 
   # exports the current list of policies into a file and then parses that file into
   # provider instances.  If an item is found on the system but not in the lsp_mapping,
@@ -33,11 +97,12 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
   # that resource absent
   def self.instances
     settings = []
-    inf = SecurityPolicy.read_policy_settings
+    inf = read_policy_settings
     # need to find the policy, section_header, policy_setting, policy_value and reg_type
     inf.each do |section, parameter_name, parameter_value|
       next if section == 'Unicode'
       next if section == 'Version'
+
       begin
         policy_desc, policy_values = SecurityPolicy.find_mapping_from_policy_name(parameter_name)
 
@@ -47,7 +112,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
             policy_type: section,
             policy_setting: parameter_name,
             policy_default: policy_values[:policy_default],
-            policy_value: SecurityPolicy.translate_value(parameter_value, policy_values),
+            policy_value: translate_value(parameter_value, policy_values),
             data_type: policy_values[:data_type],
             reg_type: policy_values[:reg_type],
           }
@@ -80,7 +145,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
   # would want to do that here.
   def flush
     begin
-      if @property_hash[:ensure] == :absent && @property_hash[:policy_type] == 'Registry Values' && @property_hash[:policy_default] != 'enabled'
+      if (@property_hash[:ensure] == :absent) && (@property_hash[:policy_type] == 'Registry Values') && (@property_hash[:policy_default] != 'enabled')
         # The registry key has been removed so no futher action is required
       else
         write_policy_to_system(resource.to_hash)
@@ -109,7 +174,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
       @property_hash[:ensure] = :absent
       if @property_hash[:policy_default] != 'enabled' # sometimes absent can mean that the default value should be 'enabled'
         # deletes the registry key when the policy is absent and the default value is not 'enabled'
-        registry_key = 'HKEY_LOCAL_' + @property_hash[:policy_setting].split('\\')[0...-1].join('\\')
+        registry_key = "HKEY_LOCAL_#{@property_hash[:policy_setting].split('\\')[0...-1].join('\\')}"
         registry_value = @property_hash[:policy_setting].split('\\').last
         reg(['delete', registry_key, '/v', registry_value, '/f'])
       end
@@ -121,12 +186,11 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
       # reset the Event audit value back to the default when policy is absent
       resource[:policy_value] = @property_hash[:policy_default]
     end
-    # other policy values can not be absent.
   end
 
   def self.prefetch(resources)
     policies = instances
-    resources.keys.each do |name|
+    resources.each_key do |name|
       if (found_pol = policies.find { |pol| pol.name == name })
         resources[name].provider = found_pol
       end
@@ -144,11 +208,11 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
 
   # required for easier mocking, this could be a Tempfile too
   def self.temp_file
-    'c:\windows\temp\secedit.inf'
+    'c:\\windows\\temp\\secedit.inf'
   end
 
   def temp_file
-    'c:\windows\temp\secedit.inf'
+    'c:\\windows\\temp\\secedit.inf'
   end
 
   # converts any values that might be of a certain type specified in the mapping
@@ -173,10 +237,14 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
     when 'Event Audit'
       value = SecurityPolicy.event_to_audit_id(policy_hash[:policy_value])
     when 'Privilege Rights'
-      sids = Array[]
+      sids = []
       pv = policy_hash[:policy_value]
       pv.split(',').sort.each do |suser|
-        sids << ((suser !~ %r{^(\*S-1-.+)$}) ? ('*' + Puppet::Util::Windows::SID.name_to_sid(suser).to_s) : suser.to_s)
+        sids << if suser !~ %r{^(\*S-1-.+)$}
+                  "*#{Puppet::Util::Windows::SID.name_to_sid(suser)}"
+                else
+                  suser.to_s
+                end
       end
       value = sids.sort.join(',')
     end
@@ -190,7 +258,6 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
     infout = "c:\\windows\\temp\\infimport-#{time}.inf"
     sdbout = "c:\\windows\\temp\\sdbimport-#{time}.inf"
     logout = "c:\\windows\\temp\\logout-#{time}.inf"
-    _status = nil
     begin
       # read the system state into the inifile object for easy variable setting
       inf = PuppetX::IniFile.new
@@ -202,7 +269,7 @@ Puppet::Type.type(:local_security_policy).provide(:policy) do
       # we can utilize the IniFile class to write out the data in ini format
       inf[section] = section_value
       inf.write(filename: infout, encoding: 'utf-8')
-      secedit('/configure', '/db', sdbout, '/cfg', infout)
+      secedit(['/configure', '/db', sdbout, '/cfg', infout])
     ensure
       FileUtils.rm_f(temp_file)
       FileUtils.rm_f(infout)

@@ -1,3 +1,4 @@
+.git/
 .*.sw[op]
 .metadata
 .yardoc
@@ -15,8 +16,13 @@
 /log/
 /pkg/
 /spec/fixtures/manifests/
-/spec/fixtures/modules/
+/spec/fixtures/modules/*
 /tmp/
 /vendor/
 /convert_report.txt
+/update_report.txt
 .DS_Store
+.project
+.envrc
+/inventory.yaml
+/spec/fixtures/litmus_inventory.yaml

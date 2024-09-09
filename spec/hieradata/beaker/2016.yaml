@@ -1,5 +1,0 @@
----
-local_security_policy::settings:
-  "Interactive logon: Machine inactivity limit":
-    ensure: 'present'
-    policy_value: '250'

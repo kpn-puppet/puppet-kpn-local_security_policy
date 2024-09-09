@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-# This class represents the INI file and can be used to parse, modify,
+# This class represents the INI file and can be used to parse, modify
 # and write INI files.
-# rubocop:disable Style/ClassAndModuleChildren
 module PuppetX
   # class IniFile
   class IniFile
@@ -11,8 +10,6 @@ module PuppetX
     class Error < StandardError; end
     VERSION = '3.0.0'
 
-    # p
-    # p
     # Public: Open an INI file and load the contents.
     #
     # filename - The name of the file as a String
@@ -33,6 +30,7 @@ module PuppetX
     # Returns an IniFile instance or nil if the file could not be opened.
     def self.load(filename, opts = {})
       return unless File.file? filename
+
       new(opts.merge(filename: filename))
     end
 
@@ -128,6 +126,7 @@ module PuppetX
       filename = opts.fetch(:filename, @filename)
       encoding = opts.fetch(:encoding, @encoding)
       return unless File.file? filename
+
       mode = encoding ? "r:#{encoding}" : 'r'
 
       File.open(filename, mode) { |fd| parse fd }
@@ -221,6 +220,7 @@ module PuppetX
     # Returns this IniFile.
     def each
       return unless block_given?
+
       @ini.each do |section, hash|
         hash.each do |param, val|
           yield section, param, val
@@ -243,6 +243,7 @@ module PuppetX
     # Returns this IniFile.
     def each_section
       return unless block_given?
+
       @ini.each_key { |section| yield section }
       self
     end
@@ -269,6 +270,7 @@ module PuppetX
     # Returns the Hash of parameter/value pairs for this section.
     def [](section)
       return nil if section.nil?
+
       @ini[section.to_s]
     end
 
@@ -374,6 +376,7 @@ module PuppetX
     def eql?(other)
       return true if equal? other
       return false unless other.instance_of? self.class
+
       @ini == other.instance_variable_get(:@ini)
     end
     alias == eql?
@@ -443,9 +446,7 @@ module PuppetX
       # Returns `true` if the current value starts with a leading double quote.
       # Otherwise returns false.
       def leading_quote?
-        # rubocop:disable Performance/StartWith
-        value && value =~ %r{\A"}
-        # rubocop:enable Performance/StartWith
+        value.start_with?('"')
       end
 
       # Given a string, attempt to parse out a value from that string. This
@@ -495,7 +496,7 @@ module PuppetX
         end
 
         if continuation
-          value << $RS if leading_quote?
+          value << $INPUT_RECORD_SEPARATOR if leading_quote?
         else
           process_property
         end
@@ -600,11 +601,17 @@ module PuppetX
         case value
         when %r{\Atrue\z}i then  true
         when %r{\Afalse\z}i then false
-        when %r{\A\s*\z}i then nil
+        when %r{\A\s*\z}i then   nil
         else
-          # rubocop:disable Style/RescueModifier
-          Integer(value) rescue Float(value) rescue unescape_value(value)
-          # rubocop:enable Style/RescueModifier
+          begin
+            begin
+              Integer(value)
+            rescue StandardError
+              Float(value)
+            end
+          rescue StandardError
+            unescape_value(value)
+          end
         end
       end
 
@@ -619,10 +626,10 @@ module PuppetX
         value = value.to_s
         value.gsub!(%r{\\[0nrt\\]}) do |char|
           case char
-          when '\0' then "\0"
-          when '\n' then "\n"
-          when '\r' then "\r"
-          when '\t' then "\t"
+          when '\0' then   "\0"
+          when '\n' then   "\n"
+          when '\r' then   "\r"
+          when '\t' then   "\t"
           when '\\\\' then '\\'
           end
         end
@@ -631,4 +638,3 @@ module PuppetX
     end
   end
 end
-# rubocop:enable Style/ClassAndModuleChildren

@@ -15,10 +15,11 @@ install:
   - wget https://apt.puppet.com/puppet-tools-release-focal.deb
   - sudo dpkg -i puppet-tools-release-focal.deb
   - sudo apt-get update
-  - sudo apt-get install pdk
+  - sudo apt-get install pdk -y --version=3.0.0
 build: false
 test_script:
-  - pdk validate --puppet-version=7 'puppet,metadata,yaml'
+  - pdk validate --parallel
+  - pdk test unit --parallel
 notifications:
   - provider: Email
     to:

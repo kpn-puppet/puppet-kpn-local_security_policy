@@ -10,12 +10,14 @@ platform:
   - x64
 configuration: Debug
 clone_depth: 10
-image: 'Ubuntu2004'
+image:
+  - 'Visual Studio 2019'
+  - 'Ubuntu2004'
 install:
   - wget https://apt.puppet.com/puppet-tools-release-focal.deb
   - sudo dpkg -i puppet-tools-release-focal.deb
   - sudo apt-get update
-  - sudo apt-get install pdk -y --version=3.0.0
+  - sudo apt-get install pdk=3.0.0 -y
 build: false
 test_script:
   - pdk validate --parallel

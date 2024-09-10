@@ -20,8 +20,7 @@ install:
   - refreshenv
 build: false
 test_script:
-  - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk validate --puppet-version=7
-  - pdk --version
+  - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk validate --puppet-version=7 'puppet,metadata,tasks,yaml'
 notifications:
   - provider: Email
     to:

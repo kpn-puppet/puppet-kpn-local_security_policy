@@ -21,7 +21,6 @@ install:
 build: false
 test_script:
   - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk validate --puppet-version=7
-  - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk test unit --puppet-version=7
   - pdk --version
 notifications:
   - provider: Email

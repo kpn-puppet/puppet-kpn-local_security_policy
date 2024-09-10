@@ -28,7 +28,7 @@ group :development do
   gem "puppet-syntax"
   gem "puppetlabs_spec_helper"
   gem "parser", '2.3.3', require: false if Gem::Version.new(RUBY_VERSION.dup) < Gem::Version.new('2.1.0')
-  gem "rubocop", '1.9.0'
+  gem "rubocop", '1.31.2'
   gem "racc", '~> 1.4.0',                                        require: false if Gem::Requirement.create(['>= 2.7.0', '< 3.0.0']).satisfied_by?(Gem::Version.new(RUBY_VERSION.dup))
   gem "fast_gettext", '1.1.0',                                   require: false if Gem::Version.new(RUBY_VERSION.dup) < Gem::Version.new('2.1.0')
   gem "fast_gettext",                                            require: false if Gem::Version.new(RUBY_VERSION.dup) >= Gem::Version.new('2.1.0')

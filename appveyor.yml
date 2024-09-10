@@ -8,23 +8,35 @@ skip_commits:
   message: /^\(?doc\)?.*/
 platform:
   - x64
-configuration: Debug
+configuration: Release
 clone_depth: 10
 image:
   - 'Visual Studio 2019'
   - 'Ubuntu2004'
-install:
-  - if "%APPVEYOR_JOB_NAME%" == "Ubuntu2004" goto install_linux
-  - if "%APPVEYOR_JOB_NAME%" == "Visual Studio 2019" goto install_windows
-install_linux:
-  - wget https://apt.puppet.com/puppet-tools-release-focal.deb
-  - sudo dpkg -i puppet-tools-release-focal.deb
-  - sudo apt-get update
-  - sudo apt-get install pdk -y
-install_windows:
-  - choco install puppet-agent --version 7.12.0 -y
-  - choco install pdk -y --version 3.0.0
-  - refreshenv
+for:
+-
+  matrix:
+    only:
+      - image: 'Visual Studio 2019'
+    environment:
+      matrix:
+        - APPVEYOR_JOB_NAME: 'Visual Studio 2019'
+    install_windows:
+      - choco install puppet-agent --version 7.12.0 -y
+      - choco install pdk -y --version 3.0.0
+      - refreshenv
+-
+  matrix:
+    only:
+      - image: 'Ubuntu2004'
+    environment:
+      matrix:
+        - APPVEYOR_JOB_NAME: 'Ubuntu2004'
+    install:
+      - wget https://apt.puppet.com/puppet-tools-release-focal.deb
+      - sudo dpkg -i puppet-tools-release-focal.deb
+      - sudo apt-get update
+      - sudo apt-get install pdk -y
 build: false
 test_script:
   - pdk validate --parallel --puppet-version=7

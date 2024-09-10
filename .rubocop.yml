@@ -1,4 +1,7 @@
 ---
 inherit_gem:
   kpn-style:
-    - ruby-2.4.yml
+    - ruby-2.5.yml
+Naming/AccessorMethodName:
+  Enabled: false
+...

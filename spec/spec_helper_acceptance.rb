@@ -1,14 +1,19 @@
 # frozen_string_literal: true
 
-require 'beaker-rspec/spec_helper'
-require 'beaker-rspec/helpers/serverspec'
+require 'beaker-rspec'
 require 'beaker/puppet_install_helper'
+require 'beaker-rspec/helpers/serverspec'
+require_relative 'spec_helper_acceptance_winrm'
+require_relative 'spec_helper_acceptance_methods'
 
-UNSUPPORTED_PLATFORMS = ['RedHat'].freeze
+UNSUPPORTED_PLATFORMS = [].freeze
 
 unless ENV['RS_PROVISION'] == 'no' || ENV['BEAKER_provision'] == 'no'
   # Install Puppet Enterprise Agent
   run_puppet_install_helper
+
+  # Clone module dependencies here...
+  clone_dependent_modules
 end
 
 RSpec.configure do |c|
@@ -20,17 +25,8 @@ RSpec.configure do |c|
 
   # Configure all nodes in nodeset
   c.before :suite do
-    # copy hiera
-    hierarchy = [
-      '%{::os.release.major}',
-      'common',
-    ]
-    write_hiera_config(hierarchy)
-    copy_hiera_data('./spec/hieradata/beaker/common.yaml')
-    copy_hiera_data('./spec/hieradata/beaker/2008 R2.yaml')
-    copy_hiera_data('./spec/hieradata/beaker/2012 R2.yaml')
-    copy_hiera_data('./spec/hieradata/beaker/2016.yaml')
-
+    # Copy modules to SUT (System Under Test)
+    install_dependent_modules
     puppet_module_install(source: proj_root, module_name: 'local_security_policy')
   end
 end

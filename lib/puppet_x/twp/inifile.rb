@@ -1,18 +1,19 @@
 # frozen_string_literal: true
 
+require 'English'
+
 # This class represents the INI file and can be used to parse, modify,
 # and write INI files.
-# rubocop:disable Style/ClassAndModuleChildren
 module PuppetX
-  # class IniFile
+  Module.nesting
+  # This class represents the INI file and can be used to parse, modify,
+  # and write INI files.
   class IniFile
     include Enumerable
 
     class Error < StandardError; end
     VERSION = '3.0.0'
 
-    # p
-    # p
     # Public: Open an INI file and load the contents.
     #
     # filename - The name of the file as a String
@@ -33,6 +34,7 @@ module PuppetX
     # Returns an IniFile instance or nil if the file could not be opened.
     def self.load(filename, opts = {})
       return unless File.file? filename
+
       new(opts.merge(filename: filename))
     end
 
@@ -128,6 +130,7 @@ module PuppetX
       filename = opts.fetch(:filename, @filename)
       encoding = opts.fetch(:encoding, @encoding)
       return unless File.file? filename
+
       mode = encoding ? "r:#{encoding}" : 'r'
 
       File.open(filename, mode) { |fd| parse fd }
@@ -221,6 +224,7 @@ module PuppetX
     # Returns this IniFile.
     def each
       return unless block_given?
+
       @ini.each do |section, hash|
         hash.each do |param, val|
           yield section, param, val
@@ -241,9 +245,10 @@ module PuppetX
     #   end
     #
     # Returns this IniFile.
-    def each_section
+    def each_section(&block)
       return unless block_given?
-      @ini.each_key { |section| yield section }
+
+      @ini.each_key(&block)
       self
     end
 
@@ -269,6 +274,7 @@ module PuppetX
     # Returns the Hash of parameter/value pairs for this section.
     def [](section)
       return nil if section.nil?
+
       @ini[section.to_s]
     end
 
@@ -374,6 +380,7 @@ module PuppetX
     def eql?(other)
       return true if equal? other
       return false unless other.instance_of? self.class
+
       @ini == other.instance_variable_get(:@ini)
     end
     alias == eql?
@@ -412,8 +419,7 @@ module PuppetX
     # object.
     class Parser
       attr_writer :section
-      attr_accessor :property
-      attr_accessor :value
+      attr_accessor :property, :value
 
       # Create a new IniFile::Parser that can be used to parse the contents of
       # an .ini file.
@@ -443,9 +449,7 @@ module PuppetX
       # Returns `true` if the current value starts with a leading double quote.
       # Otherwise returns false.
       def leading_quote?
-        # rubocop:disable Performance/StartWith
         value && value =~ %r{\A"}
-        # rubocop:enable Performance/StartWith
       end
 
       # Given a string, attempt to parse out a value from that string. This
@@ -464,7 +468,7 @@ module PuppetX
         if leading_quote?
           # check for a closing quote at the end of the string
           if string =~ @close_quote
-            value << Regexp.last_match(1)
+            value << ::Regexp.last_match(1)
 
           # otherwise just append the string to the value
           else
@@ -476,18 +480,18 @@ module PuppetX
         else
           case string
           when @full_quote
-            self.value = Regexp.last_match(1)
+            self.value = ::Regexp.last_match(1)
 
           when @open_quote
-            self.value = Regexp.last_match(1)
+            self.value = ::Regexp.last_match(1)
             continuation = true
 
           when @trailing_slash
-            value ? value << Regexp.last_match(1) : self.value = Regexp.last_match(1)
+            value ? value << ::Regexp.last_match(1) : self.value = ::Regexp.last_match(1)
             continuation = true
 
           when @normal_value
-            value ? value << Regexp.last_match(1) : self.value = Regexp.last_match(1)
+            value ? value << ::Regexp.last_match(1) : self.value = ::Regexp.last_match(1)
 
           else
             error
@@ -495,7 +499,7 @@ module PuppetX
         end
 
         if continuation
-          value << $RS if leading_quote?
+          value << $INPUT_RECORD_SEPARATOR if leading_quote?
         else
           process_property
         end
@@ -528,12 +532,12 @@ module PuppetX
             when @ignore_regexp
               nil
             when @section_regexp
-              self.section = @hash[Regexp.last_match(1)]
+              self.section = @hash[::Regexp.last_match(1)]
             when @property_regexp
-              self.property = Regexp.last_match(1).strip
+              self.property = ::Regexp.last_match(1).strip
               error if property.empty?
 
-              continuation = parse_value Regexp.last_match(2)
+              continuation = parse_value ::Regexp.last_match(2)
             else
               error
             end
@@ -561,7 +565,7 @@ module PuppetX
         property.strip!
         value.strip!
 
-        self.value = Regexp.last_match(1) if value =~ %r{\A"(.*)(?<!\\)"\z}m
+        self.value = ::Regexp.last_match(1) if value =~ %r{\A"(.*)(?<!\\)"\z}m
 
         section[property] = typecast(value)
 
@@ -600,11 +604,17 @@ module PuppetX
         case value
         when %r{\Atrue\z}i then  true
         when %r{\Afalse\z}i then false
-        when %r{\A\s*\z}i then nil
+        when %r{\A\s*\z}i then   nil
         else
-          # rubocop:disable Style/RescueModifier
-          Integer(value) rescue Float(value) rescue unescape_value(value)
-          # rubocop:enable Style/RescueModifier
+          begin
+            begin
+              Integer(value)
+            rescue StandardError
+              Float(value)
+            end
+          rescue StandardError
+            unescape_value(value)
+          end
         end
       end
 
@@ -618,17 +628,16 @@ module PuppetX
       def unescape_value(value)
         value = value.to_s
         value.gsub!(%r{\\[0nrt\\]}) do |char|
-          case char
-          when '\0' then "\0"
-          when '\n' then "\n"
-          when '\r' then "\r"
-          when '\t' then "\t"
-          when '\\\\' then '\\'
-          end
+          {
+            '\0' => "\0",
+            '\n' => "\n",
+            '\r' => "\r",
+            '\t' => "\t",
+            '\\\\' => '\\',
+          }[char]
         end
         value
       end
     end
   end
 end
-# rubocop:enable Style/ClassAndModuleChildren

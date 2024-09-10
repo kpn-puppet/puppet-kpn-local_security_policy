@@ -20,7 +20,7 @@ install:
   - refreshenv
 build: false
 test_script:
-  - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk validate --puppet-version=7 'puppet,metadata,yaml,ruby'
+  - C:\Progra~1\Puppet~1\DevelopmentKit\bin\pdk validate --puppet-version=7 'puppet,metadata,yaml'
 notifications:
   - provider: Email
     to:

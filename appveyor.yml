@@ -18,10 +18,7 @@ for:
   matrix:
     only:
       - image: 'Visual Studio 2019'
-    environment:
-      matrix:
-        - APPVEYOR_JOB_NAME: 'Visual Studio 2019'
-    install_windows:
+    install:
       - choco install puppet-agent --version 7.12.0 -y
       - choco install pdk -y --version 3.0.0
       - refreshenv
@@ -29,9 +26,6 @@ for:
   matrix:
     only:
       - image: 'Ubuntu2004'
-    environment:
-      matrix:
-        - APPVEYOR_JOB_NAME: 'Ubuntu2004'
     install:
       - wget https://apt.puppet.com/puppet-tools-release-focal.deb
       - sudo dpkg -i puppet-tools-release-focal.deb

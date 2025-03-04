@@ -25,7 +25,7 @@ class SecurityPolicy
       sids = []
       policy_value.split(',').sort.each do |suser|
         suser.strip!
-        sids << user_to_sid(suser)
+        sids << SecurityPolicy.user_to_sid(suser)
       end
       sids.sort.join(',')
     end

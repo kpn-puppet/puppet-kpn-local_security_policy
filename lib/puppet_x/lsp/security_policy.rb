@@ -14,36 +14,36 @@ class SecurityPolicy
     name = Puppet::Util::Windows::SID.name_to_sid(value)
     return value unless name
 
-    "*#{Puppet::Util::Windows::SID.name_to_sid(value)}"
+    "*#{name}"
   end
 
   def convert_privilege_right(ensure_value, policy_value)
     # we need to convert users to sids first
     if ensure_value.to_s == 'absent'
-      ''
+      pv = ''
     else
       sids = []
       policy_value.split(',').sort.each do |suser|
         suser.strip!
-        sids << user_to_sid(suser)
+        sids << SecurityPolicy.user_to_sid(suser)
       end
-      sids.sort.join(',')
+      pv = sids.sort.join(',')
     end
+    pv
   end
 
   # converts the policy value inside the policy hash to conform to the secedit standards
   def self.convert_policy_hash(policy_hash)
-    value = case policy_hash[:policy_type]
-            when 'Privilege Rights'
-              convert_privilege_right(policy_hash[:ensure], policy_hash[:policy_value])
-            when 'Event Audit'
-              event_to_audit_id(policy_hash[:policy_value])
-            when 'Registry Values'
-              SecurityPolicy.convert_registry_value(policy_hash[:name], policy_hash[:policy_value])
-            else
-              policy_hash[:policy_value]
-            end
-    policy_hash[:policy_value] = value
+    policy_hash[:policy_value] = case policy_hash[:policy_type]
+                                 when 'Privilege Rights'
+                                   convert_privilege_right(policy_hash[:ensure], policy_hash[:policy_value])
+                                 when 'Event Audit'
+                                   event_to_audit_id(policy_hash[:policy_value])
+                                 when 'Registry Values'
+                                   SecurityPolicy.convert_registry_value(policy_hash[:name], policy_hash[:policy_value])
+                                 else
+                                   policy_hash[:policy_value]
+                                 end
     policy_hash
   end
 
@@ -88,7 +88,7 @@ class SecurityPolicy
   # returns the key and hash value given the policy desc
   def self.find_mapping_from_policy_desc(desc)
     name = desc.downcase
-    _, value = lsp_mapping.find do |key, _hash|
+    _key, value = lsp_mapping.find do |key, _hash|
       key.downcase == name
     end
     raise KeyError, "#{desc} is not a valid policy" unless value
@@ -114,7 +114,6 @@ class SecurityPolicy
     # I would rather not have to look this info up, but the type code will not always have this info handy
     # without knowing the policy type we can't figure out what to convert
     policy_type = find_mapping_from_policy_desc(policy_hash[:name])[:policy_type]
-    puts policy_type
     case policy_type.to_s
     when 'Privilege Rights'
       value = sp.convert_privilege_right(policy_hash[:ensure], value)

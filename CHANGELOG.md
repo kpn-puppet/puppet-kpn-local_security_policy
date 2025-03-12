@@ -1,5 +1,9 @@
 # Changelog for Local Security Policy
 
+2024-10-15 Release 4.0.1
+
+- Bugfix 'undefined method `user_to_sid`'
+
 2024-01-08 Release 4.0.0
 
 - Convert code to PDK

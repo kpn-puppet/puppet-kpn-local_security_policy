@@ -27,10 +27,9 @@ describe 'SecurityPolicy', if: RUBY_PLATFORM =~ %r{cygwin|mswin|mingw|bccwin|win
     expect(security_policy.user_to_sid('*S-11-5-80-0')).to eq('*S-11-5-80-0')
   end
 
-#  it 'returns sid' do
-#    expect(security_policy.user_to_sid('Network Configuration Operators')).to eq('*S-1-5-32-556')
-#    # expect(security_policy.user_to_sid('NT_SERVICE\\ALL_SERVICES')).to eq('*S-1-5-80-0')
-#  end
+  it 'returns sid' do
+    expect(security_policy.user_to_sid('Network Configuration Operators')).to eq('*S-1-5-32-556')
+  end
 
   it 'returns user when sid is not found' do
     expect(security_policy.user_to_sid('N_SERVICE\\ALL_SERVICES')).to eq('N_SERVICE\\ALL_SERVICES')

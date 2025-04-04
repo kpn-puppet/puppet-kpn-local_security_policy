@@ -1176,6 +1176,28 @@ class SecurityPolicy
         data_type: :boolean,
         policy_default: 'disabled',
       },
+      'Network security: Restrict NTLM: Audit Incoming NTLM Traffic' => {
+        name: 'MACHINE\System\CurrentControlSet\Control\Lsa\MSV1_0\AuditReceivingNTLMTraffic',
+        reg_type: '4',
+        policy_type: 'Registry Values',
+        data_type: :multi_select,
+        policy_options: {
+          '0' => 'Disable',
+          '1' => 'Enable auditing for domain accounts',
+          '2' => 'Enable auditing for all accounts',
+        },
+      },
+      'Network security: Restrict NTLM: Outgoing NTLM traffic to remote servers' => {
+        name: 'MACHINE\System\CurrentControlSet\Control\Lsa\MSV1_0\RestrictSendingNTLMTraffic',
+        reg_type: '4',
+        policy_type: 'Registry Values',
+        data_type: :multi_select,
+        policy_options: {
+          '0' => 'Allow all',
+          '1' => 'Audit all',
+          '2' => 'Deny all',
+        },
+      },
     }
   end
 end

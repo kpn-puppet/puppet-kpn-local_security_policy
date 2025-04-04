@@ -1,5 +1,11 @@
 # Changelog for Local Security Policy
 
+2025-03-13 Release 4.0.2
+
+- Add new policies:
+  - Restrict NTLM: Audit Incoming NTLM Traffic
+  - Restrict NTLM: Outgoing NTLM traffic to remote servers
+
 2024-10-15 Release 4.0.1
 
 - Bugfix 'undefined method `user_to_sid`'

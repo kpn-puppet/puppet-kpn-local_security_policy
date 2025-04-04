@@ -1,4 +1,5 @@
 # Puppet Local Security Policy
+
 Forked from [git@github.com:logicminds/local_security_policy.git](git@github.com:logicminds/local_security_policy.git)
 
 ## Local_security_policy features
@@ -176,6 +177,7 @@ Accounts: Guest account status
 Accounts: Limit local account use of blank passwords to console logon only
 Accounts: Rename administrator account
 Accounts: Rename guest account
+Accounts: Require Login to Change Password
 Audit: Audit the access of global system objects
 Audit: Audit the use of Backup and Restore privilege
 Audit: Force audit policy subcategory settings (Windows Vista or later) to override audit policy category settings
@@ -234,6 +236,10 @@ Network security: LAN Manager authentication level
 Network security: LDAP client signing requirements
 Network security: Minimum session security for NTLM SSP based (including secure RPC) clients
 Network security: Minimum session security for NTLM SSP based (including secure RPC) servers
+Network security: Restrict NTLM: Audit Incoming NTLM Traffic
+Network security: Restrict NTLM: Outgoing NTLM traffic to remote servers
+Restrict NTLM: Audit Incoming NTLM Traffic
+Restrict NTLM: Outgoing NTLM traffic to remote servers
 Recovery console: Allow automatic administrative logon
 Recovery console: Allow floppy copy and access to all drives and all folders
 Shutdown: Allow system to be shut down without having to log on
@@ -307,7 +313,9 @@ Currently for data_type there is `:string`, `:integer`, `:boolean` or `:multi_se
 ## TODO: Future release
 
 - Handle unsupported policies
+
 ## Limitations
+
 This is where you list OS compatibility, version compatibility, etc.
 
 This module works on:
@@ -316,6 +324,7 @@ This module works on:
 - Windows 2016
 - Windows 2019
 - Windows 2022
+- Windows 2025
 
 ## Development
 
@@ -324,6 +333,7 @@ You can contribute by submitting issues, providing feedback and joining the disc
 Go to: `https://github.com/kpn-puppet/puppet-kpn-local_security_policy`
 
 If you want to fix bugs, add new features etc:
+
 - Fork it
 - Create a feature branch ( git checkout -b my-new-feature )
 - Apply your changes and update rspec tests

@@ -1,6 +1,6 @@
 {
   "name": "kpn-local_security_policy",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "author": "KPN",
   "summary": "Windows Local Security Policy management.",
   "license": "proprietary",
@@ -20,7 +20,8 @@
         "2012 R2",
         "2016",
         "2019",
-        "2022"
+        "2022",
+        "2025"
       ]
     }
   ],
